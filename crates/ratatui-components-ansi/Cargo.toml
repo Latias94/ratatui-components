@@ -1,0 +1,9 @@
+[package]
+name = "ratatui-components-ansi"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ansi-to-tui.workspace = true
+ratatui.workspace = true
+

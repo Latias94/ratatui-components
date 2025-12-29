@@ -1,0 +1,10 @@
+[package]
+name = "ratatui-components-syntax-syntect"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ratatui.workspace = true
+ratatui-components = { path = "../ratatui-components" }
+syntect.workspace = true
+

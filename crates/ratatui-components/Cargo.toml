@@ -1,0 +1,14 @@
+[package]
+name = "ratatui-components"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ratatui.workspace = true
+unicode-width.workspace = true
+
+[dev-dependencies]
+crossterm.workspace = true
+ratatui-components-diff = { path = "../ratatui-components-diff" }
+ratatui-components-markdown = { path = "../ratatui-components-markdown" }
+ratatui-components-syntax-syntect = { path = "../ratatui-components-syntax-syntect" }

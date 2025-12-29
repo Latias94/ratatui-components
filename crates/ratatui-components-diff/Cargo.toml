@@ -1,0 +1,10 @@
+[package]
+name = "ratatui-components-diff"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ratatui.workspace = true
+ratatui-components = { path = "../ratatui-components" }
+unicode-width.workspace = true
+similar.workspace = true

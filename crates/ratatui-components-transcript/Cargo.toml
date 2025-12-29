@@ -1,0 +1,21 @@
+[package]
+name = "ratatui-components-transcript"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ratatui.workspace = true
+unicode-width.workspace = true
+
+ratatui-components = { path = "../ratatui-components" }
+ratatui-components-ansi = { path = "../ratatui-components-ansi" }
+ratatui-components-diff = { path = "../ratatui-components-diff" }
+ratatui-components-markdown = { path = "../ratatui-components-markdown" }
+
+[features]
+default = []
+mdstream = ["ratatui-components-markdown/mdstream"]
+
+[dev-dependencies]
+crossterm.workspace = true
+ratatui-components-syntax-syntect = { path = "../ratatui-components-syntax-syntect" }

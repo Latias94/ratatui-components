@@ -1,0 +1,30 @@
+[package]
+name = "ratatui-components-markdown"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+mdstream = { version = "0.2.0", optional = true }
+pulldown-cmark.workspace = true
+ratatui.workspace = true
+ratatui-components = { path = "../ratatui-components" }
+unicode-width.workspace = true
+url.workspace = true
+
+[features]
+default = []
+mdstream = ["dep:mdstream"]
+
+[dev-dependencies]
+crossterm.workspace = true
+criterion = "0.5"
+ratatui-components-syntax-syntect = { path = "../ratatui-components-syntax-syntect" }
+
+[[bench]]
+name = "markdown_view"
+harness = false
+
+[[bench]]
+name = "markdown_view_mdstream"
+harness = false
+required-features = ["mdstream"]
