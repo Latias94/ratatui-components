@@ -234,12 +234,12 @@ impl TranscriptView {
             InputEvent::Key(key) => {
                 if key.modifiers.ctrl || key.modifiers.alt {
                     if key.modifiers.ctrl && matches!(key.code, KeyCode::Char('d')) {
-                        let delta = self.state.viewport_h.saturating_sub(1) as i16;
+                        let delta = self.state.viewport_h.saturating_sub(1) as i32;
                         self.scroll_y_by(delta);
                         return TranscriptAction::Redraw;
                     }
                     if key.modifiers.ctrl && matches!(key.code, KeyCode::Char('u')) {
-                        let delta = -(self.state.viewport_h.saturating_sub(1) as i16);
+                        let delta = -(self.state.viewport_h.saturating_sub(1) as i32);
                         self.scroll_y_by(delta);
                         return TranscriptAction::Redraw;
                     }
@@ -256,12 +256,12 @@ impl TranscriptView {
                         TranscriptAction::Redraw
                     }
                     KeyCode::PageDown => {
-                        let delta = self.state.viewport_h.saturating_sub(1) as i16;
+                        let delta = self.state.viewport_h.saturating_sub(1) as i32;
                         self.scroll_y_by(delta);
                         TranscriptAction::Redraw
                     }
                     KeyCode::PageUp => {
-                        let delta = -(self.state.viewport_h.saturating_sub(1) as i16);
+                        let delta = -(self.state.viewport_h.saturating_sub(1) as i32);
                         self.scroll_y_by(delta);
                         TranscriptAction::Redraw
                     }
@@ -389,7 +389,7 @@ impl TranscriptView {
         self.state.clamp();
     }
 
-    pub fn scroll_y_by(&mut self, delta: i16) {
+    pub fn scroll_y_by(&mut self, delta: i32) {
         self.state.scroll_y_by(delta);
         if delta < 0 {
             self.follow_tail_pinned = false;
@@ -398,7 +398,7 @@ impl TranscriptView {
         }
     }
 
-    pub fn scroll_x_by(&mut self, delta: i16) {
+    pub fn scroll_x_by(&mut self, delta: i32) {
         self.state.scroll_x_by(delta);
     }
 
@@ -424,7 +424,7 @@ impl TranscriptView {
 
         for row in 0..content_area.height {
             let y = content_area.y + row;
-            let global = self.state.y as u32 + row as u32;
+            let global = self.state.y + row as u32;
 
             buf.set_style(
                 Rect::new(content_area.x, y, content_area.width, 1),
@@ -567,10 +567,8 @@ impl TranscriptView {
                 }
             }
 
-            self.state.set_content(
-                max_content_width,
-                self.total_lines().min(u16::MAX as u32) as u16,
-            );
+            self.state
+                .set_content(max_content_width as u32, self.total_lines());
         } else {
             let start_idx = self.layout_dirty_from.unwrap_or(self.entries.len());
             self.layout_dirty_from = None;
@@ -597,10 +595,8 @@ impl TranscriptView {
                 }
             }
 
-            self.state.set_content(
-                max_content_width,
-                self.total_lines().min(u16::MAX as u32) as u16,
-            );
+            self.state
+                .set_content(max_content_width as u32, self.total_lines());
         }
 
         if self.force_to_bottom {
@@ -639,8 +635,10 @@ impl TranscriptView {
         self.offsets.last().copied().unwrap_or(0)
     }
 
-    fn max_y(&self) -> u16 {
-        self.state.content_h.saturating_sub(self.state.viewport_h)
+    fn max_y(&self) -> u32 {
+        self.state
+            .content_h
+            .saturating_sub(self.state.viewport_h as u32)
     }
 
     fn is_at_bottom(&self) -> bool {

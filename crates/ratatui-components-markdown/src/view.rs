@@ -302,11 +302,11 @@ impl MarkdownView {
             .set_viewport(content_area.width, content_area.height);
     }
 
-    pub fn scroll_y_by(&mut self, delta: i16) {
+    pub fn scroll_y_by(&mut self, delta: i32) {
         self.state.scroll_y_by(delta);
     }
 
-    pub fn scroll_x_by(&mut self, delta: i16) {
+    pub fn scroll_x_by(&mut self, delta: i32) {
         self.state.scroll_x_by(delta);
     }
 
@@ -337,7 +337,7 @@ impl MarkdownView {
 
         for row in 0..content_area.height {
             let y = content_area.y + row;
-            let idx = self.state.y as usize + row as usize;
+            let idx = (self.state.y as usize).saturating_add(row as usize);
             let line = self.rendered.get(idx);
             buf.set_style(
                 Rect::new(content_area.x, y, content_area.width, 1),
@@ -406,11 +406,11 @@ impl MarkdownView {
             self.options.show_code_line_numbers,
             self.options.table_style,
         );
-        let content_h = self.rendered.len() as u16;
+        let content_h = self.rendered.len() as u32;
         let content_w = self
             .rendered
             .iter()
-            .map(|l| UnicodeWidthStr::width(l.plain.as_str()) as u16)
+            .map(|l| UnicodeWidthStr::width(l.plain.as_str()) as u32)
             .max()
             .unwrap_or(0);
         self.state.set_content(content_w, content_h);
@@ -654,6 +654,7 @@ fn parse_markdown_blocks(input: &str, opts: ParseOptions<'_>) -> Vec<Block> {
         in_code_block: bool,
         code_language: Option<String>,
         code_lines: Vec<String>,
+        code_current: String,
         code_prefix: Vec<Segment>,
         code_indent: u16,
         code_block_indent: u16,
@@ -716,6 +717,7 @@ fn parse_markdown_blocks(input: &str, opts: ParseOptions<'_>) -> Vec<Block> {
                 in_code_block: false,
                 code_language: None,
                 code_lines: Vec::new(),
+                code_current: String::new(),
                 code_prefix: Vec::new(),
                 code_indent: opts.code_block_indent,
                 code_block_indent: opts.code_block_indent,
@@ -854,6 +856,9 @@ fn parse_markdown_blocks(input: &str, opts: ParseOptions<'_>) -> Vec<Block> {
         fn flush_code(&mut self) {
             if !self.in_code_block {
                 return;
+            }
+            if !self.code_current.is_empty() {
+                self.code_lines.push(std::mem::take(&mut self.code_current));
             }
             if self.code_lines.last().is_some_and(|s| s.is_empty()) {
                 self.code_lines.pop();
@@ -1129,6 +1134,8 @@ fn parse_markdown_blocks(input: &str, opts: ParseOptions<'_>) -> Vec<Block> {
                         }
                         b.maybe_blank();
                         b.in_code_block = true;
+                        b.code_lines.clear();
+                        b.code_current.clear();
                         let (_, subsequent) = b.snapshot_prefixes();
                         b.code_prefix = subsequent;
                         b.code_indent = if b.blockquote_depth > 0 {
@@ -1304,11 +1311,12 @@ fn parse_markdown_blocks(input: &str, opts: ParseOptions<'_>) -> Vec<Block> {
             },
             Event::Text(text) => {
                 if b.in_code_block {
-                    for line in split_preserve_empty(&text) {
-                        if line.contains('\t') {
-                            b.code_lines.push(line.replace('\t', "    "));
-                        } else {
-                            b.code_lines.push(line);
+                    for ch in text.chars() {
+                        match ch {
+                            '\n' => b.code_lines.push(std::mem::take(&mut b.code_current)),
+                            '\r' => {}
+                            '\t' => b.code_current.push_str("    "),
+                            other => b.code_current.push(other),
                         }
                     }
                     continue;
@@ -1356,7 +1364,7 @@ fn parse_markdown_blocks(input: &str, opts: ParseOptions<'_>) -> Vec<Block> {
             }
             Event::SoftBreak => {
                 if b.in_code_block {
-                    b.code_lines.push(String::new());
+                    b.code_lines.push(std::mem::take(&mut b.code_current));
                     continue;
                 }
                 if b.in_table && b.in_table_cell {
@@ -1381,7 +1389,7 @@ fn parse_markdown_blocks(input: &str, opts: ParseOptions<'_>) -> Vec<Block> {
             }
             Event::HardBreak => {
                 if b.in_code_block {
-                    b.code_lines.push(String::new());
+                    b.code_lines.push(std::mem::take(&mut b.code_current));
                     continue;
                 }
                 if b.in_table && b.in_table_cell {
@@ -1517,23 +1525,6 @@ fn push_text_segments(
     s.inline_code = inline_code;
     s.link = link;
     out.push(s);
-}
-
-fn split_preserve_empty(s: &str) -> Vec<String> {
-    if s.is_empty() {
-        return vec![String::new()];
-    }
-    let mut out = Vec::new();
-    let mut cur = String::new();
-    for ch in s.chars() {
-        if ch == '\n' {
-            out.push(std::mem::take(&mut cur));
-        } else {
-            cur.push(ch);
-        }
-    }
-    out.push(cur);
-    out
 }
 
 fn normalize_fenced_lang(lang: &CowStr<'_>) -> Option<String> {

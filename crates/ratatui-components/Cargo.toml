@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 ratatui.workspace = true
 unicode-width.workspace = true
+virtualizer = { git = "https://github.com/Latias94/virtualizer", branch = "main" }
 
 [dev-dependencies]
 crossterm.workspace = true

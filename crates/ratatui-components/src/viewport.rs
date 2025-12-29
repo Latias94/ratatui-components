@@ -6,12 +6,12 @@ use unicode_width::UnicodeWidthStr;
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct ViewportState {
-    pub x: u16,
-    pub y: u16,
+    pub x: u32,
+    pub y: u32,
     pub viewport_w: u16,
     pub viewport_h: u16,
-    pub content_w: u16,
-    pub content_h: u16,
+    pub content_w: u32,
+    pub content_h: u32,
 }
 
 impl ViewportState {
@@ -21,35 +21,35 @@ impl ViewportState {
         self.clamp();
     }
 
-    pub fn set_content(&mut self, w: u16, h: u16) {
+    pub fn set_content(&mut self, w: u32, h: u32) {
         self.content_w = w;
         self.content_h = h;
         self.clamp();
     }
 
     pub fn clamp(&mut self) {
-        let max_y = self.content_h.saturating_sub(self.viewport_h);
-        let max_x = self.content_w.saturating_sub(self.viewport_w);
+        let max_y = self.max_y();
+        let max_x = self.max_x();
         self.y = self.y.min(max_y);
         self.x = self.x.min(max_x);
     }
 
-    pub fn scroll_y_by(&mut self, delta: i16) {
-        let next = self.y as i32 + delta as i32;
-        self.y = next.clamp(0, self.max_y() as i32) as u16;
+    pub fn scroll_y_by(&mut self, delta: i32) {
+        let next = self.y as i64 + delta as i64;
+        self.y = next.clamp(0, self.max_y() as i64) as u32;
     }
 
-    pub fn scroll_x_by(&mut self, delta: i16) {
-        let next = self.x as i32 + delta as i32;
-        self.x = next.clamp(0, self.max_x() as i32) as u16;
+    pub fn scroll_x_by(&mut self, delta: i32) {
+        let next = self.x as i64 + delta as i64;
+        self.x = next.clamp(0, self.max_x() as i64) as u32;
     }
 
     pub fn page_down(&mut self) {
-        self.scroll_y_by(self.viewport_h.saturating_sub(1) as i16);
+        self.scroll_y_by(self.viewport_h.saturating_sub(1) as i32);
     }
 
     pub fn page_up(&mut self) {
-        self.scroll_y_by(-(self.viewport_h.saturating_sub(1) as i16));
+        self.scroll_y_by(-(self.viewport_h.saturating_sub(1) as i32));
     }
 
     pub fn to_top(&mut self) {
@@ -69,20 +69,21 @@ impl ViewportState {
     }
 
     pub fn percent_y(&self) -> Option<u8> {
-        if self.content_h == 0 || self.viewport_h == 0 || self.content_h <= self.viewport_h {
+        if self.content_h == 0 || self.viewport_h == 0 || self.content_h <= self.viewport_h as u32
+        {
             return None;
         }
-        let visible_bottom = self.y.saturating_add(self.viewport_h) as f32;
-        let pct = (visible_bottom / self.content_h as f32 * 100.0).round();
+        let visible_bottom = self.y.saturating_add(self.viewport_h as u32) as f64;
+        let pct = (visible_bottom / self.content_h as f64 * 100.0).round();
         Some(pct.clamp(0.0, 100.0) as u8)
     }
 
-    fn max_y(&self) -> u16 {
-        self.content_h.saturating_sub(self.viewport_h)
+    fn max_y(&self) -> u32 {
+        self.content_h.saturating_sub(self.viewport_h as u32)
     }
 
-    fn max_x(&self) -> u16 {
-        self.content_w.saturating_sub(self.viewport_w)
+    fn max_x(&self) -> u32 {
+        self.content_w.saturating_sub(self.viewport_w as u32)
     }
 }
 
@@ -119,7 +120,7 @@ pub fn render_lines_with_options(
 
     for row in 0..text_area.height {
         let y = row + text_area.y;
-        let idx = state.y as usize + row as usize;
+        let idx = (state.y as usize).saturating_add(row as usize);
         buf.set_style(Rect::new(text_area.x, y, text_area.width, 1), options.style);
         if let Some(line) = lines.get(idx) {
             let visible = slice_by_cols(line, state.x, text_area.width);
@@ -148,22 +149,25 @@ fn render_scrollbar(area: Rect, buf: &mut Buffer, state: &ViewportState, style: 
     if area.height == 0 {
         return;
     }
-    if state.content_h <= state.viewport_h || state.content_h == 0 {
+    if state.content_h <= state.viewport_h as u32 || state.content_h == 0 {
         for dy in 0..area.height {
             buf.set_stringn(area.x, area.y + dy, " ", 1, style);
         }
         return;
     }
 
-    let track_h = area.height as f32;
-    let thumb_h = ((state.viewport_h as f32 / state.content_h as f32) * track_h)
+    let track_h = area.height as f64;
+    let thumb_h = ((state.viewport_h as f64 / state.content_h as f64) * track_h)
         .round()
         .clamp(1.0, track_h) as u16;
 
-    let max_y = state.content_h.saturating_sub(state.viewport_h).max(1) as f32;
-    let thumb_top = ((state.y as f32 / max_y) * (track_h - thumb_h as f32))
+    let max_y = state
+        .content_h
+        .saturating_sub(state.viewport_h as u32)
+        .max(1) as f64;
+    let thumb_top = ((state.y as f64 / max_y) * (track_h - thumb_h as f64))
         .round()
-        .clamp(0.0, (track_h - thumb_h as f32).max(0.0)) as u16;
+        .clamp(0.0, (track_h - thumb_h as f64).max(0.0)) as u16;
 
     for dy in 0..area.height {
         let ch = if dy >= thumb_top && dy < thumb_top + thumb_h {
@@ -175,7 +179,7 @@ fn render_scrollbar(area: Rect, buf: &mut Buffer, state: &ViewportState, style: 
     }
 }
 
-fn slice_by_cols(input: &str, start_col: u16, max_cols: u16) -> String {
+fn slice_by_cols(input: &str, start_col: u32, max_cols: u16) -> String {
     if max_cols == 0 {
         return String::new();
     }

@@ -237,7 +237,7 @@ impl MarkdownStreamView {
                 Rect::new(content_area.x, y, content_area.width, 1),
                 theme.text_primary,
             );
-            let idx = self.viewport.y as usize + row as usize;
+            let idx = (self.viewport.y as usize).saturating_add(row as usize);
             if let Some(line) = self.line_at(idx) {
                 render::render_spans_clipped(
                     inner.x,
@@ -320,9 +320,8 @@ impl MarkdownStreamView {
         let content_h = self
             .committed_rendered_lines
             .len()
-            .saturating_add(self.pending_lines.len())
-            .min(u16::MAX as usize) as u16;
-        let content_w = self.committed_max_w.max(self.pending_max_w);
+            .saturating_add(self.pending_lines.len()) as u32;
+        let content_w = self.committed_max_w.max(self.pending_max_w) as u32;
         self.viewport.set_content(content_w, content_h);
     }
 

@@ -368,13 +368,13 @@ fn handle_action(
             Focus::Input => input.state.to_bottom(),
         },
         Action::PageDown => match *focus {
-            Focus::Markdown => md.scroll_y_by(md.state.viewport_h.saturating_sub(1) as i16),
-            Focus::Diff => diff.scroll_y_by(diff.state.viewport_h.saturating_sub(1) as i16),
+            Focus::Markdown => md.scroll_y_by(md.state.viewport_h.saturating_sub(1) as i32),
+            Focus::Diff => diff.scroll_y_by(diff.state.viewport_h.saturating_sub(1) as i32),
             Focus::Input => input.state.page_down(),
         },
         Action::PageUp => match *focus {
-            Focus::Markdown => md.scroll_y_by(-(md.state.viewport_h.saturating_sub(1) as i16)),
-            Focus::Diff => diff.scroll_y_by(-(diff.state.viewport_h.saturating_sub(1) as i16)),
+            Focus::Markdown => md.scroll_y_by(-(md.state.viewport_h.saturating_sub(1) as i32)),
+            Focus::Diff => diff.scroll_y_by(-(diff.state.viewport_h.saturating_sub(1) as i32)),
             Focus::Input => input.state.page_up(),
         },
     }

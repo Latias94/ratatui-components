@@ -134,10 +134,13 @@ impl TextArea {
         let (cx, cy) = self.cursor_screen_pos();
         let x = cx.saturating_sub(self.state.x);
         let y = cy.saturating_sub(self.state.y);
-        if x >= content_area.width || y >= content_area.height {
+        if x >= content_area.width as u32 || y >= content_area.height as u32 {
             return None;
         }
-        Some((content_area.x + x, content_area.y + y))
+        Some((
+            content_area.x + x.min(u16::MAX as u32) as u16,
+            content_area.y + y.min(u16::MAX as u32) as u16,
+        ))
     }
 
     pub fn input(&mut self, event: InputEvent) -> TextAreaAction {
@@ -170,7 +173,7 @@ impl TextArea {
 
         for row in 0..content_area.height {
             let y = content_area.y + row;
-            let idx = self.state.y as usize + row as usize;
+            let idx = (self.state.y as usize).saturating_add(row as usize);
             buf.set_style(
                 Rect::new(content_area.x, y, content_area.width, 1),
                 self.options.style,
@@ -308,11 +311,11 @@ impl TextArea {
     }
 
     fn recompute_content_size(&mut self) {
-        let content_h = self.lines.len() as u16;
+        let content_h = self.lines.len() as u32;
         let content_w = self
             .lines
             .iter()
-            .map(|l| UnicodeWidthStr::width(l.as_str()) as u16)
+            .map(|l| UnicodeWidthStr::width(l.as_str()) as u32)
             .max()
             .unwrap_or(0);
         self.state.set_content(content_w, content_h);
@@ -322,22 +325,22 @@ impl TextArea {
         let (cx, cy) = self.cursor_screen_pos();
         if cy < self.state.y {
             self.state.y = cy;
-        } else if cy >= self.state.y.saturating_add(self.state.viewport_h) {
-            self.state.y = cy.saturating_sub(self.state.viewport_h.saturating_sub(1));
+        } else if cy >= self.state.y.saturating_add(self.state.viewport_h as u32) {
+            self.state.y = cy.saturating_sub(self.state.viewport_h.saturating_sub(1) as u32);
         }
 
         if cx < self.state.x {
             self.state.x = cx;
-        } else if cx >= self.state.x.saturating_add(self.state.viewport_w) {
-            self.state.x = cx.saturating_sub(self.state.viewport_w.saturating_sub(1));
+        } else if cx >= self.state.x.saturating_add(self.state.viewport_w as u32) {
+            self.state.x = cx.saturating_sub(self.state.viewport_w.saturating_sub(1) as u32);
         }
 
         self.state.clamp();
     }
 
-    fn cursor_screen_pos(&self) -> (u16, u16) {
-        let y = self.cursor.row.min(self.lines.len().saturating_sub(1)) as u16;
-        let x = self.cursor_display_x() as u16;
+    fn cursor_screen_pos(&self) -> (u32, u32) {
+        let y = self.cursor.row.min(self.lines.len().saturating_sub(1)) as u32;
+        let x = self.cursor_display_x() as u32;
         (x, y)
     }
 

@@ -954,6 +954,7 @@ dependencies = [
  "ratatui-components-markdown",
  "ratatui-components-syntax-syntect",
  "unicode-width 0.2.0",
+ "virtualizer",
 ]
 
 [[package]]
@@ -962,6 +963,16 @@ version = "0.1.0"
 dependencies = [
  "ansi-to-tui",
  "ratatui",
+]
+
+[[package]]
+name = "ratatui-components-datagrid"
+version = "0.1.0"
+dependencies = [
+ "crossterm",
+ "ratatui",
+ "ratatui-components",
+ "virtualizer",
 ]
 
 [[package]]
@@ -1480,6 +1491,11 @@ name = "utf8_iter"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
+
+[[package]]
+name = "virtualizer"
+version = "0.1.0"
+source = "git+https://github.com/Latias94/virtualizer?branch=main#d167c336be5f8647c200adf4fb36eaca3521b5da"
 
 [[package]]
 name = "walkdir"

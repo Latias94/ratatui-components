@@ -12,22 +12,25 @@ pub fn render_scrollbar(area: Rect, buf: &mut Buffer, state: &ViewportState, sty
     if area.height == 0 {
         return;
     }
-    if state.content_h <= state.viewport_h || state.content_h == 0 {
+    if state.content_h <= state.viewport_h as u32 || state.content_h == 0 {
         for dy in 0..area.height {
             buf.set_stringn(area.x, area.y + dy, " ", 1, style);
         }
         return;
     }
 
-    let track_h = area.height as f32;
-    let thumb_h = ((state.viewport_h as f32 / state.content_h as f32) * track_h)
+    let track_h = area.height as f64;
+    let thumb_h = ((state.viewport_h as f64 / state.content_h as f64) * track_h)
         .round()
         .clamp(1.0, track_h) as u16;
 
-    let max_y = state.content_h.saturating_sub(state.viewport_h).max(1) as f32;
-    let thumb_top = ((state.y as f32 / max_y) * (track_h - thumb_h as f32))
+    let max_y = state
+        .content_h
+        .saturating_sub(state.viewport_h as u32)
+        .max(1) as f64;
+    let thumb_top = ((state.y as f64 / max_y) * (track_h - thumb_h as f64))
         .round()
-        .clamp(0.0, (track_h - thumb_h as f32).max(0.0)) as u16;
+        .clamp(0.0, (track_h - thumb_h as f64).max(0.0)) as u16;
 
     for dy in 0..area.height {
         let ch = if dy >= thumb_top && dy < thumb_top + thumb_h {
@@ -42,7 +45,7 @@ pub fn render_scrollbar(area: Rect, buf: &mut Buffer, state: &ViewportState, sty
 pub fn render_spans_clipped(
     x: u16,
     y: u16,
-    start_col: u16,
+    start_col: u32,
     max_cols: u16,
     buf: &mut Buffer,
     spans: &[Span<'static>],
@@ -104,7 +107,7 @@ pub fn render_spans_clipped(
     }
 }
 
-pub fn slice_by_cols(input: &str, start_col: u16, max_cols: u16) -> String {
+pub fn slice_by_cols(input: &str, start_col: u32, max_cols: u16) -> String {
     if max_cols == 0 {
         return String::new();
     }

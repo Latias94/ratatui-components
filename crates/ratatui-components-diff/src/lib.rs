@@ -90,8 +90,8 @@ impl DiffView {
         };
         self.visible_highlight_cache = None;
         self.state.set_content(
-            self.parsed.max_content_width,
-            self.parsed.lines.len() as u16,
+            self.parsed.max_content_width as u32,
+            self.parsed.lines.len() as u32,
         );
     }
 
@@ -116,11 +116,11 @@ impl DiffView {
         self.state.set_viewport(viewport_w, content_area.height);
     }
 
-    pub fn scroll_y_by(&mut self, delta: i16) {
+    pub fn scroll_y_by(&mut self, delta: i32) {
         self.state.scroll_y_by(delta);
     }
 
-    pub fn scroll_x_by(&mut self, delta: i16) {
+    pub fn scroll_x_by(&mut self, delta: i32) {
         self.state.scroll_x_by(delta);
     }
 
@@ -162,7 +162,7 @@ impl DiffView {
 
         for row in 0..content_area.height {
             let y = content_area.y + row;
-            let idx = self.state.y as usize + row as usize;
+            let idx = (self.state.y as usize).saturating_add(row as usize);
             let Some(line) = self.parsed.lines.get(idx) else {
                 buf.set_style(
                     Rect::new(content_area.x, y, content_area.width, 1),

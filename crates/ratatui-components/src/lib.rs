@@ -10,3 +10,4 @@ pub mod help;
 pub mod input;
 pub mod keymap;
 pub mod textarea;
+pub mod virtual_list;
