@@ -29,4 +29,4 @@ crossterm = "0.28"
 similar = "2"
 url = "2"
 termprofile = "0.2"
-virtualizer = { git = "https://github.com/Latias94/virtualizer", rev = "686f97350c88e1b055338a06e2ba7891461f80d9" }
+virtualizer = "0.1.0"

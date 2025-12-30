@@ -88,6 +88,7 @@ pub struct VirtualListView {
     cached_width: Option<u16>,
     width_cell: Arc<AtomicU32>,
     estimator: Arc<dyn Fn(usize, u16) -> u32 + Send + Sync>,
+    scratch_items: Vec<VirtualItem>,
 }
 
 impl Default for VirtualListView {
@@ -107,6 +108,7 @@ impl Default for VirtualListView {
             cached_width: None,
             width_cell,
             estimator,
+            scratch_items: Vec::new(),
         }
     }
 }
@@ -178,7 +180,7 @@ impl VirtualListView {
 
     pub fn set_range_extractor(
         &mut self,
-        f: Option<impl Fn(virtualizer::VirtualRange) -> Vec<usize> + Send + Sync + 'static>,
+        f: Option<impl Fn(virtualizer::Range, &mut dyn FnMut(usize)) + Send + Sync + 'static>,
     ) {
         self.virtualizer.set_range_extractor(f);
     }
@@ -206,7 +208,8 @@ impl VirtualListView {
         }
         self.sync_virtualizer(count);
         if let Some(cursor) = self.cursor {
-            self.virtualizer.scroll_to_index(cursor, Align::Auto);
+            let target = self.virtualizer.scroll_to_index_offset(cursor, Align::Auto);
+            self.virtualizer.set_scroll_offset(target);
             self.viewport.y = self.virtualizer.scroll_offset().min(u32::MAX as u64) as u32;
         }
         self.viewport.clamp();
@@ -272,11 +275,13 @@ impl VirtualListView {
         let cursor_style = self.options.cursor_style.patch(theme.accent);
         let selected_style = self.options.selected_style.patch(theme.accent);
 
-        let items = self.virtualizer.get_virtual_items();
+        self.scratch_items.clear();
+        self.virtualizer
+            .for_each_virtual_item(|item| self.scratch_items.push(item));
         let scroll = self.virtualizer.scroll_offset();
 
         let mut measurements: Vec<(usize, u32)> = Vec::new();
-        for item in items {
+        for item in self.scratch_items.iter().copied() {
             let rel_start = item.start as i64 - scroll as i64;
             let clip_top = (-rel_start).max(0) as u32;
             let visible_start = rel_start.max(0) as u16;
@@ -528,7 +533,7 @@ impl VirtualListView {
     }
 
     fn total_size_u32(&self) -> u32 {
-        self.virtualizer.get_total_size().min(u32::MAX as u64) as u32
+        self.virtualizer.total_size().min(u32::MAX as u64) as u32
     }
 
     fn make_virtualizer(

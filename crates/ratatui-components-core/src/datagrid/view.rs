@@ -134,6 +134,8 @@ pub struct DataGridView {
     selection_anchor: Option<Cell>,
     row_v: Virtualizer,
     col_v: Virtualizer,
+    row_items: Vec<virtualizer::VirtualItem>,
+    col_items: Vec<virtualizer::VirtualItem>,
 }
 
 impl Default for DataGridView {
@@ -150,7 +152,6 @@ impl Default for DataGridView {
         let row_v = Virtualizer::new(row_opts);
 
         let mut col_opts = VirtualizerOptions::new(0, |_| 1);
-        col_opts.horizontal = true;
         col_opts.gap = col_gap;
         col_opts.overscan = overscan_cols;
         let col_v = Virtualizer::new(col_opts);
@@ -165,6 +166,8 @@ impl Default for DataGridView {
             selection_anchor: None,
             row_v,
             col_v,
+            row_items: Vec::new(),
+            col_items: Vec::new(),
         }
     }
 }
@@ -276,8 +279,10 @@ impl DataGridView {
         let Some(c) = self.cursor else {
             return;
         };
-        self.row_v.scroll_to_index(c.row, Align::Auto);
-        self.col_v.scroll_to_index(c.col, Align::Auto);
+        let target_y = self.row_v.scroll_to_index_offset(c.row, Align::Auto);
+        let target_x = self.col_v.scroll_to_index_offset(c.col, Align::Auto);
+        self.row_v.set_scroll_offset(target_y);
+        self.col_v.set_scroll_offset(target_x);
         self.state.y = self.row_v.scroll_offset().min(u32::MAX as u64) as u32;
         self.state.x = self.col_v.scroll_offset().min(u32::MAX as u64) as u32;
         self.state.clamp();
@@ -329,9 +334,16 @@ impl DataGridView {
         buf.set_style(header_area, header_style);
 
         self.sync_virtualizers(body_area);
+        self.collect_virtual_items();
 
         if header_area.height > 0 {
-            self.render_header(header_area, buf, header_style, grid_line_style);
+            self.render_header(
+                header_area,
+                buf,
+                header_style,
+                grid_line_style,
+                &self.col_items,
+            );
         }
 
         self.render_body(
@@ -341,6 +353,8 @@ impl DataGridView {
             cursor_style,
             selected_style,
             grid_line_style,
+            &self.row_items,
+            &self.col_items,
             theme,
             &mut render_cell,
         );
@@ -579,11 +593,11 @@ impl DataGridView {
     }
 
     fn total_h_u32(&self) -> u32 {
-        self.row_v.get_total_size().min(u32::MAX as u64) as u32
+        self.row_v.total_size().min(u32::MAX as u64) as u32
     }
 
     fn total_w_u32(&self) -> u32 {
-        self.col_v.get_total_size().min(u32::MAX as u64) as u32
+        self.col_v.total_size().min(u32::MAX as u64) as u32
     }
 
     fn rebuild_row_virtualizer(&mut self) {
@@ -603,7 +617,6 @@ impl DataGridView {
         let mut opts = VirtualizerOptions::new(self.columns.len(), move |i| {
             widths2.get(i).copied().unwrap_or(1).max(1)
         });
-        opts.horizontal = true;
         opts.gap = self.options.col_gap;
         opts.overscan = self.options.overscan_cols;
         self.col_v = Virtualizer::new(opts);
@@ -612,12 +625,23 @@ impl DataGridView {
         self.state.x = self.col_v.scroll_offset().min(u32::MAX as u64) as u32;
     }
 
+    fn collect_virtual_items(&mut self) {
+        self.row_items.clear();
+        self.row_v
+            .for_each_virtual_item(|item| self.row_items.push(item));
+
+        self.col_items.clear();
+        self.col_v
+            .for_each_virtual_item(|item| self.col_items.push(item));
+    }
+
     fn render_header(
-        &mut self,
+        &self,
         area: Rect,
         buf: &mut Buffer,
         style: Style,
         grid_line_style: Style,
+        col_items: &[virtualizer::VirtualItem],
     ) {
         if area.width == 0 || area.height == 0 {
             return;
@@ -628,7 +652,7 @@ impl DataGridView {
         buf.set_style(area, style);
 
         let scroll_x = self.col_v.scroll_offset();
-        for col_item in self.col_v.get_virtual_items() {
+        for col_item in col_items.iter().copied() {
             let col = &self.columns[col_item.index];
             let (rect, clip_left) = clipped_rect_x(area, scroll_x, col_item.start, col_item.size);
             if rect.width == 0 {
@@ -653,13 +677,15 @@ impl DataGridView {
     }
 
     fn render_body<F>(
-        &mut self,
+        &self,
         area: Rect,
         buf: &mut Buffer,
         base_style: Style,
         cursor_style: Style,
         selected_style: Style,
         grid_line_style: Style,
+        row_items: &[virtualizer::VirtualItem],
+        col_items: &[virtualizer::VirtualItem],
         theme: &Theme,
         render_cell: &mut F,
     ) where
@@ -674,16 +700,14 @@ impl DataGridView {
 
         let scroll_x = self.col_v.scroll_offset();
         let scroll_y = self.row_v.scroll_offset();
-        let cols = self.col_v.get_virtual_items();
-        let rows = self.row_v.get_virtual_items();
 
-        for row_item in rows {
+        for row_item in row_items.iter().copied() {
             let (row_rect, clip_top) =
                 clipped_rect_y(area, scroll_y, row_item.start, row_item.size);
             if row_rect.height == 0 {
                 continue;
             }
-            for col_item in &cols {
+            for col_item in col_items.iter().copied() {
                 let (cell_rect, clip_left) =
                     clipped_rect_x(row_rect, scroll_x, col_item.start, col_item.size);
                 if cell_rect.width == 0 || cell_rect.height == 0 {

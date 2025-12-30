@@ -1786,7 +1786,8 @@ checksum = "b6c140620e7ffbb22c2dee59cafe6084a59b5ffc27a8859a5f0d494b5d52b6be"
 [[package]]
 name = "virtualizer"
 version = "0.1.0"
-source = "git+https://github.com/Latias94/virtualizer?rev=686f97350c88e1b055338a06e2ba7891461f80d9#686f97350c88e1b055338a06e2ba7891461f80d9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a031051caa6f514bfd21ebf7876ebcff5ee61249d1f0621b8d8f20eb93a5883"
 
 [[package]]
 name = "walkdir"
