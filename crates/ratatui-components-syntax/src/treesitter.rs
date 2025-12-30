@@ -216,6 +216,27 @@ impl TreeSitterHighlighter {
         &mut self.theme
     }
 
+    pub fn set_theme(&mut self, theme: TreeSitterTheme) {
+        self.theme = theme;
+        self.refresh_styles();
+    }
+
+    pub fn set_background(&mut self, background: Option<Color>) {
+        self.theme.background = background;
+        self.refresh_styles();
+    }
+
+    pub fn refresh_styles(&mut self) {
+        for entry in &mut self.languages {
+            entry.styles = entry
+                .config
+                .names()
+                .iter()
+                .map(|name| self.theme.style_for_capture(name))
+                .collect();
+        }
+    }
+
     pub fn register(
         &mut self,
         language_name: impl Into<String>,
@@ -439,6 +460,10 @@ impl TreeSitterHighlighter {
         };
         self.languages.get(idx)
     }
+
+    pub fn supports_language(&self, language: &str) -> bool {
+        self.keys.contains_key(language)
+    }
 }
 
 impl CodeHighlighter for TreeSitterHighlighter {
@@ -551,7 +576,7 @@ mod tests {
     fn highlights_other_enabled_languages_without_panicking() {
         let h = TreeSitterHighlighter::new();
 
-        let mut cases: Vec<(&str, Vec<&str>)> = Vec::new();
+        let cases: &mut Vec<(&str, Vec<&str>)> = &mut Vec::new();
 
         #[cfg(feature = "treesitter-lang-bash")]
         cases.push(("sh", vec!["echo hello", "x=1"]));
@@ -582,7 +607,7 @@ mod tests {
         #[cfg(feature = "treesitter-lang-java")]
         cases.push(("java", vec!["class A {", "  void f() {}", "}"]));
 
-        for (lang, lines) in cases {
+        for (lang, lines) in cases.drain(..) {
             let out = h.highlight_lines(Some(lang), &lines);
             assert_eq!(out.len(), lines.len(), "lang={lang}");
             assert!(out.iter().all(|l| !l.is_empty()), "lang={lang}");
