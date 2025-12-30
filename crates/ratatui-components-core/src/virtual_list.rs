@@ -275,9 +275,8 @@ impl VirtualListView {
         let cursor_style = self.options.cursor_style.patch(theme.accent);
         let selected_style = self.options.selected_style.patch(theme.accent);
 
-        self.scratch_items.clear();
         self.virtualizer
-            .for_each_virtual_item(|item| self.scratch_items.push(item));
+            .collect_virtual_items(&mut self.scratch_items);
         let scroll = self.virtualizer.scroll_offset();
 
         let mut measurements: Vec<(usize, u32)> = Vec::new();

@@ -279,10 +279,8 @@ impl DataGridView {
         let Some(c) = self.cursor else {
             return;
         };
-        let target_y = self.row_v.scroll_to_index_offset(c.row, Align::Auto);
-        let target_x = self.col_v.scroll_to_index_offset(c.col, Align::Auto);
-        self.row_v.set_scroll_offset(target_y);
-        self.col_v.set_scroll_offset(target_x);
+        self.row_v.scroll_to_index(c.row, Align::Auto);
+        self.col_v.scroll_to_index(c.col, Align::Auto);
         self.state.y = self.row_v.scroll_offset().min(u32::MAX as u64) as u32;
         self.state.x = self.col_v.scroll_offset().min(u32::MAX as u64) as u32;
         self.state.clamp();
@@ -626,13 +624,8 @@ impl DataGridView {
     }
 
     fn collect_virtual_items(&mut self) {
-        self.row_items.clear();
-        self.row_v
-            .for_each_virtual_item(|item| self.row_items.push(item));
-
-        self.col_items.clear();
-        self.col_v
-            .for_each_virtual_item(|item| self.col_items.push(item));
+        self.row_v.collect_virtual_items(&mut self.row_items);
+        self.col_v.collect_virtual_items(&mut self.col_items);
     }
 
     fn render_header(
