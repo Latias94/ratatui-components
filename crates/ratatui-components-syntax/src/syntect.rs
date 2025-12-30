@@ -9,9 +9,9 @@ use syntect::parsing::{SyntaxReference, SyntaxSet};
 use syntect::util::LinesWithEndings;
 
 #[cfg(feature = "termprofile")]
-use termprofile::TermProfile;
-#[cfg(feature = "termprofile")]
 use ratatui_core::style::Color as CoreColor;
+#[cfg(feature = "termprofile")]
+use termprofile::TermProfile;
 
 pub struct SyntectHighlighter {
     syntax_set: SyntaxSet,

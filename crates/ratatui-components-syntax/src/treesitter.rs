@@ -63,7 +63,9 @@ impl Default for TreeSitterTheme {
             string: Style::default().fg(Color::Green),
             number: Style::default().fg(Color::LightBlue),
             constant: Style::default().fg(Color::LightCyan),
-            comment: Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+            comment: Style::default()
+                .fg(Color::DarkGray)
+                .add_modifier(Modifier::ITALIC),
             property: Style::default().fg(Color::LightMagenta),
             variable: Style::default().fg(Color::White),
             punctuation: Style::default().fg(Color::DarkGray),
@@ -87,9 +89,15 @@ impl TreeSitterTheme {
             self.r#type
         } else if capture.contains("function") || capture.contains("method") {
             self.function
-        } else if capture.contains("constant") || capture.contains("boolean") || capture.contains("builtin") {
+        } else if capture.contains("constant")
+            || capture.contains("boolean")
+            || capture.contains("builtin")
+        {
             self.constant
-        } else if capture.contains("property") || capture.contains("field") || capture.contains("attribute") {
+        } else if capture.contains("property")
+            || capture.contains("field")
+            || capture.contains("attribute")
+        {
             self.property
         } else if capture.contains("variable") || capture.contains("parameter") {
             self.variable
@@ -546,7 +554,9 @@ impl CodeHighlighter for TreeSitterHighlighter {
 
         for (i, spans) in out.iter_mut().enumerate() {
             if spans.is_empty() {
-                spans.push(Span::raw(raw_lines.get(i).copied().unwrap_or("").to_string()));
+                spans.push(Span::raw(
+                    raw_lines.get(i).copied().unwrap_or("").to_string(),
+                ));
             }
         }
 
@@ -581,10 +591,7 @@ mod tests {
     fn produces_some_non_default_styles() {
         let h = TreeSitterHighlighter::new();
         let out = h.highlight_lines(Some("rs"), &["fn main() {", "  let x = 1;", "}"]);
-        let any_styled = out
-            .iter()
-            .flatten()
-            .any(|s| s.style != Style::default());
+        let any_styled = out.iter().flatten().any(|s| s.style != Style::default());
         assert!(any_styled);
     }
 
@@ -601,9 +608,15 @@ mod tests {
         #[cfg(feature = "treesitter-lang-javascript")]
         cases.push(("js", vec!["function f(x) {", "  return x + 1;", "}"]));
         #[cfg(feature = "treesitter-lang-typescript")]
-        cases.push(("ts", vec!["function f(x: number): number {", "  return x + 1;", "}"]));
+        cases.push((
+            "ts",
+            vec!["function f(x: number): number {", "  return x + 1;", "}"],
+        ));
         #[cfg(feature = "treesitter-lang-typescript")]
-        cases.push(("tsx", vec!["const x = <div>Hello</div>;", "export default x;"]));
+        cases.push((
+            "tsx",
+            vec!["const x = <div>Hello</div>;", "export default x;"],
+        ));
         #[cfg(feature = "treesitter-lang-json")]
         cases.push(("json", vec!["{", "  \"x\": 1", "}"]));
         #[cfg(feature = "treesitter-lang-yaml")]

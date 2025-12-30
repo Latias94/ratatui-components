@@ -18,8 +18,6 @@ use crate::theme::Theme;
 use crate::viewport::ViewportState;
 use std::hash::Hash;
 use std::hash::Hasher;
-use std::sync::mpsc;
-use std::thread;
 
 #[derive(Clone, Debug)]
 pub struct CodeViewOptions {
@@ -28,8 +26,6 @@ pub struct CodeViewOptions {
     pub scroll: ScrollBindings,
     pub enable_selection: bool,
     pub selection: SelectionBindings,
-    pub async_highlighting: bool,
-    pub max_sync_highlight_lines: usize,
 }
 
 impl Default for CodeViewOptions {
@@ -40,8 +36,6 @@ impl Default for CodeViewOptions {
             scroll: ScrollBindings::default(),
             enable_selection: true,
             selection: SelectionBindings::default(),
-            async_highlighting: true,
-            max_sync_highlight_lines: 200,
         }
     }
 }
@@ -54,41 +48,15 @@ struct VisibleHighlightCache {
     spans: std::sync::Arc<std::collections::HashMap<usize, Vec<Span<'static>>>>,
 }
 
-#[derive(Clone, Debug)]
-struct FullHighlightCache {
-    hash: u64,
-    spans: std::sync::Arc<Vec<Vec<Span<'static>>>>,
-}
-
-struct HighlightRequest {
-    hash: u64,
-    language: Option<String>,
-    lines: std::sync::Arc<Vec<String>>,
-}
-
-struct HighlightResult {
-    hash: u64,
-    highlighted: std::sync::Arc<Vec<Vec<Span<'static>>>>,
-}
-
-struct HighlightWorker {
-    req_tx: mpsc::Sender<HighlightRequest>,
-    res_rx: mpsc::Receiver<HighlightResult>,
-}
-
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct CodeView {
-    lines: std::sync::Arc<Vec<String>>,
+    lines: Vec<String>,
     max_content_width: u16,
     pub state: ViewportState,
     options: CodeViewOptions,
     highlighter: Option<std::sync::Arc<dyn CodeHighlighter + Send + Sync>>,
     language: Option<String>,
-    full_inputs_hash: u64,
     visible_highlight_cache: Option<VisibleHighlightCache>,
-    full_highlight_cache: Option<FullHighlightCache>,
-    full_highlight_pending: Option<u64>,
-    highlight_worker: Option<HighlightWorker>,
     highlight_scratch: String,
     selection_anchor: Option<(usize, u32)>,
     selection: Option<((usize, u32), (usize, u32))>,
@@ -288,7 +256,6 @@ impl CodeView {
 
     pub fn set_language(&mut self, language: Option<impl Into<String>>) {
         self.language = language.map(Into::into);
-        self.recompute_full_inputs_hash();
         self.invalidate_highlighting();
     }
 
@@ -313,8 +280,7 @@ impl CodeView {
             .max()
             .unwrap_or(0);
         let h = lines.len() as u32;
-        self.lines = std::sync::Arc::new(lines);
-        self.recompute_full_inputs_hash();
+        self.lines = lines;
         self.invalidate_highlighting();
         self.state
             .set_content(self.max_content_width as u32, h.max(0));
@@ -350,8 +316,6 @@ impl CodeView {
             return;
         }
 
-        self.poll_highlight_results();
-
         self.set_viewport(area);
 
         let (content_area, scrollbar_x) = if self.options.show_scrollbar && area.width >= 2 {
@@ -370,28 +334,17 @@ impl CodeView {
         };
         let content_w = content_area.width.saturating_sub(gutter_w);
 
-        let (base_style, gutter_style) = if let Some(bg) = self.highlighter.as_ref().and_then(|h| h.background_color())
-        {
-            (theme.text_primary.bg(bg), theme.text_muted.bg(bg))
-        } else {
-            (theme.text_primary, theme.text_muted)
-        };
+        let (base_style, gutter_style) =
+            if let Some(bg) = self.highlighter.as_ref().and_then(|h| h.background_color()) {
+                (theme.text_primary.bg(bg), theme.text_muted.bg(bg))
+            } else {
+                (theme.text_primary, theme.text_muted)
+            };
 
         let start = self.state.y as usize;
         let end = (start + content_area.height as usize).min(self.lines.len());
 
-        let highlighted_full = if self.highlighter.is_some() && content_w > 0 {
-            self.ensure_full_highlighting();
-            self.full_highlight_cache.as_ref().map(|c| c.spans.clone())
-        } else {
-            None
-        };
-
-        let highlighted_visible = if highlighted_full.is_none()
-            && self.highlighter.is_some()
-            && content_w > 0
-            && end.saturating_sub(start) <= self.options.max_sync_highlight_lines
-        {
+        let highlighted_visible = if self.highlighter.is_some() && content_w > 0 && start < end {
             Some(self.highlight_visible_cached(start, end))
         } else {
             None
@@ -433,11 +386,7 @@ impl CodeView {
                 continue;
             };
 
-            let mut spans = if let Some(all) = highlighted_full.as_ref()
-                && let Some(spans) = all.get(idx)
-            {
-                spans.clone()
-            } else if let Some(m) = highlighted_visible.as_ref()
+            let mut spans = if let Some(m) = highlighted_visible.as_ref()
                 && let Some(spans) = m.get(&idx)
             {
                 spans.clone()
@@ -534,7 +483,8 @@ impl CodeView {
             }
             self.highlight_scratch.push_str(line);
         }
-        let highlighted = highlighter.highlight_text(self.language.as_deref(), &self.highlight_scratch);
+        let highlighted =
+            highlighter.highlight_text(self.language.as_deref(), &self.highlight_scratch);
         let mut map = std::collections::HashMap::new();
         for (i, spans) in highlighted.into_iter().enumerate() {
             map.insert(start + i, spans);
@@ -552,123 +502,6 @@ impl CodeView {
 
     fn invalidate_highlighting(&mut self) {
         self.visible_highlight_cache = None;
-        self.full_highlight_cache = None;
-        self.full_highlight_pending = None;
-        self.highlight_worker = None;
-    }
-
-    fn recompute_full_inputs_hash(&mut self) {
-        let mut h = std::collections::hash_map::DefaultHasher::new();
-        self.language.hash(&mut h);
-        for l in self.lines.iter() {
-            l.hash(&mut h);
-        }
-        self.full_inputs_hash = h.finish();
-    }
-
-    fn poll_highlight_results(&mut self) {
-        let Some(worker) = self.highlight_worker.as_ref() else {
-            return;
-        };
-        while let Ok(res) = worker.res_rx.try_recv() {
-            if res.hash != self.full_inputs_hash {
-                continue;
-            }
-            self.full_highlight_cache = Some(FullHighlightCache {
-                hash: res.hash,
-                spans: res.highlighted,
-            });
-            self.full_highlight_pending = None;
-        }
-    }
-
-    fn ensure_highlight_worker(&mut self) {
-        if self.highlight_worker.is_some() {
-            return;
-        }
-        let Some(hi) = self.highlighter.clone() else {
-            return;
-        };
-
-        let (req_tx, req_rx) = mpsc::channel::<HighlightRequest>();
-        let (res_tx, res_rx) = mpsc::channel::<HighlightResult>();
-
-        thread::spawn(move || {
-            while let Ok(req) = req_rx.recv() {
-                let refs: Vec<&str> = req.lines.iter().map(|s| s.as_str()).collect();
-                let highlighted = hi.highlight_lines(req.language.as_deref(), &refs);
-                let res = HighlightResult {
-                    hash: req.hash,
-                    highlighted: std::sync::Arc::new(highlighted),
-                };
-                if res_tx.send(res).is_err() {
-                    break;
-                }
-            }
-        });
-
-        self.highlight_worker = Some(HighlightWorker { req_tx, res_rx });
-    }
-
-    fn ensure_full_highlighting(&mut self) {
-        if !self.options.async_highlighting {
-            return;
-        }
-        let Some(_) = self.highlighter.as_ref() else {
-            return;
-        };
-        if self.lines.is_empty() {
-            return;
-        }
-
-        let hash = self.full_inputs_hash;
-        if let Some(cache) = self.full_highlight_cache.as_ref()
-            && cache.hash == hash
-        {
-            return;
-        }
-
-        if self.full_highlight_pending == Some(hash) {
-            return;
-        }
-
-        self.ensure_highlight_worker();
-        let Some(worker) = self.highlight_worker.as_ref() else {
-            return;
-        };
-
-        let req = HighlightRequest {
-            hash,
-            language: self.language.clone(),
-            lines: self.lines.clone(),
-        };
-
-        if worker.req_tx.send(req).is_ok() {
-            self.full_highlight_pending = Some(hash);
-        } else {
-            self.highlight_worker = None;
-        }
-    }
-}
-
-impl Clone for CodeView {
-    fn clone(&self) -> Self {
-        Self {
-            lines: self.lines.clone(),
-            max_content_width: self.max_content_width,
-            state: self.state,
-            options: self.options.clone(),
-            highlighter: self.highlighter.clone(),
-            language: self.language.clone(),
-            full_inputs_hash: self.full_inputs_hash,
-            visible_highlight_cache: None,
-            full_highlight_cache: None,
-            full_highlight_pending: None,
-            highlight_worker: None,
-            highlight_scratch: String::new(),
-            selection_anchor: self.selection_anchor,
-            selection: self.selection,
-        }
     }
 }
 

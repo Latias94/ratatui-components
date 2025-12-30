@@ -16,8 +16,6 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
-use std::sync::mpsc;
-use std::thread;
 
 use crate::input::MouseButton;
 use crate::input::MouseEvent;
@@ -39,8 +37,6 @@ pub struct DiffViewOptions {
     pub scroll: ScrollBindings,
     pub enable_selection: bool,
     pub selection: SelectionBindings,
-    pub async_highlighting: bool,
-    pub max_sync_highlight_lines: usize,
 }
 
 impl Default for DiffViewOptions {
@@ -53,8 +49,6 @@ impl Default for DiffViewOptions {
             scroll: ScrollBindings::default(),
             enable_selection: true,
             selection: SelectionBindings::default(),
-            async_highlighting: true,
-            max_sync_highlight_lines: 200,
         }
     }
 }
@@ -66,13 +60,9 @@ pub struct DiffView {
     options: DiffViewOptions,
     highlighter: Option<Arc<dyn CodeHighlighter + Send + Sync>>,
     language_override: Option<String>,
-    full_inputs_hash: u64,
     inline_ranges: HashMap<usize, Vec<(usize, usize)>>,
     visible_highlight_cache: Option<VisibleHighlightCache>,
     highlight_scratch: String,
-    full_highlight_cache: Option<FullHighlightCache>,
-    full_highlight_pending: Option<u64>,
-    highlight_worker: Option<HighlightWorker>,
     selection_anchor: Option<(usize, u32)>,
     selection: Option<((usize, u32), (usize, u32))>,
 }
@@ -85,33 +75,6 @@ struct VisibleHighlightCache {
     spans: Arc<HashMap<usize, Vec<Span<'static>>>>,
 }
 
-#[derive(Clone, Debug)]
-struct FullHighlightCache {
-    hash: u64,
-    spans: Arc<HashMap<usize, Vec<Span<'static>>>>,
-}
-
-struct HighlightRequestItem {
-    idx: usize,
-    lang: Option<String>,
-    content: String,
-}
-
-struct HighlightRequest {
-    hash: u64,
-    items: Vec<HighlightRequestItem>,
-}
-
-struct HighlightResult {
-    hash: u64,
-    highlighted: Arc<HashMap<usize, Vec<Span<'static>>>>,
-}
-
-struct HighlightWorker {
-    req_tx: mpsc::Sender<HighlightRequest>,
-    res_rx: mpsc::Receiver<HighlightResult>,
-}
-
 impl Clone for DiffView {
     fn clone(&self) -> Self {
         Self {
@@ -120,13 +83,9 @@ impl Clone for DiffView {
             options: self.options.clone(),
             highlighter: self.highlighter.clone(),
             language_override: self.language_override.clone(),
-            full_inputs_hash: self.full_inputs_hash,
             inline_ranges: self.inline_ranges.clone(),
             visible_highlight_cache: None,
             highlight_scratch: String::new(),
-            full_highlight_cache: None,
-            full_highlight_pending: None,
-            highlight_worker: None,
             selection_anchor: self.selection_anchor,
             selection: self.selection,
         }
@@ -152,7 +111,6 @@ impl DiffView {
 
     pub fn set_language_override(&mut self, language: Option<impl Into<String>>) {
         self.language_override = language.map(Into::into);
-        self.recompute_full_inputs_hash();
         self.invalidate_highlighting();
     }
 
@@ -163,7 +121,6 @@ impl DiffView {
         } else {
             HashMap::new()
         };
-        self.recompute_full_inputs_hash();
         self.invalidate_highlighting();
         self.state.set_content(
             self.parsed.max_content_width as u32,
@@ -372,8 +329,6 @@ impl DiffView {
 
         self.set_viewport(area);
 
-        self.poll_highlight_results();
-
         let code_bg = self.highlighter.as_ref().and_then(|h| h.background_color());
 
         let (content_area, scrollbar_x) = if self.options.show_scrollbar && area.width >= 2 {
@@ -399,20 +354,12 @@ impl DiffView {
         let start = self.state.y as usize;
         let end = (start + content_area.height as usize).min(self.parsed.lines.len());
 
-        let highlighted = if self.options.highlight_hunks && self.highlighter.is_some() && content_w > 0 {
-            self.ensure_full_highlighting();
-            if let Some(cache) = self.full_highlight_cache.as_ref()
-                && cache.hash == self.full_inputs_hash
-            {
-                Some(cache.spans.clone())
-            } else {
-                let code_lines = count_highlightable_lines(&self.parsed, start, end);
-                if self.options.async_highlighting && code_lines > self.options.max_sync_highlight_lines {
-                    None
-                } else {
-                    Some(self.highlight_visible_cached(start, end))
-                }
-            }
+        let highlighted = if self.options.highlight_hunks
+            && self.highlighter.is_some()
+            && content_w > 0
+            && start < end
+        {
+            Some(self.highlight_visible_cached(start, end))
         } else {
             None
         };
@@ -426,10 +373,7 @@ impl DiffView {
                 } else {
                     theme.text_primary
                 };
-                buf.set_style(
-                    Rect::new(content_area.x, y, content_area.width, 1),
-                    style,
-                );
+                buf.set_style(Rect::new(content_area.x, y, content_area.width, 1), style);
                 continue;
             };
 
@@ -570,29 +514,11 @@ impl DiffView {
 
     pub fn lines_for_transcript(&mut self, theme: &Theme) -> Vec<Line<'static>> {
         let mut out: Vec<Line<'static>> = Vec::with_capacity(self.parsed.lines.len());
-
-        self.poll_highlight_results();
-
-        let mut highlighted: Option<Arc<HashMap<usize, Vec<Span<'static>>>>> = None;
-        if self.options.highlight_hunks && self.highlighter.is_some() {
-            let hash = self.full_inputs_hash;
-            if let Some(cache) = self.full_highlight_cache.as_ref()
-                && cache.hash == hash
-            {
-                highlighted = Some(cache.spans.clone());
-            } else {
-                let code_lines = count_highlightable_lines(&self.parsed, 0, self.parsed.lines.len());
-                if self.options.async_highlighting && code_lines > self.options.max_sync_highlight_lines {
-                    self.ensure_full_highlighting();
-                } else {
-                    let m = self.highlight_visible_uncached(0, self.parsed.lines.len());
-                    let spans = Arc::new(m);
-                    self.full_highlight_cache = Some(FullHighlightCache { hash, spans: spans.clone() });
-                    self.full_highlight_pending = None;
-                    highlighted = Some(spans);
-                }
-            }
-        }
+        let highlighted = if self.options.highlight_hunks && self.highlighter.is_some() {
+            Some(self.highlight_visible_cached(0, self.parsed.lines.len()))
+        } else {
+            None
+        };
 
         for (idx, l) in self.parsed.lines.iter().enumerate() {
             let line_style = style_for_kind(theme, l.kind);
@@ -668,10 +594,10 @@ impl DiffView {
         let mut run_indices: Vec<usize> = Vec::new();
 
         let flush = |out: &mut HashMap<usize, Vec<Span<'static>>>,
-                         scratch: &mut String,
-                         lang: &mut Option<&str>,
-                         lines: &mut Vec<&str>,
-                         indices: &mut Vec<usize>| {
+                     scratch: &mut String,
+                     lang: &mut Option<&str>,
+                     lines: &mut Vec<&str>,
+                     indices: &mut Vec<usize>| {
             if indices.is_empty() {
                 return;
             }
@@ -737,178 +663,7 @@ impl DiffView {
 
     fn invalidate_highlighting(&mut self) {
         self.visible_highlight_cache = None;
-        self.full_highlight_cache = None;
-        self.full_highlight_pending = None;
-        self.highlight_worker = None;
     }
-
-    fn recompute_full_inputs_hash(&mut self) {
-        self.full_inputs_hash = highlight_inputs_hash(
-            &self.parsed,
-            self.language_override.as_deref(),
-            0,
-            self.parsed.lines.len(),
-        );
-    }
-
-    fn poll_highlight_results(&mut self) {
-        let Some(worker) = self.highlight_worker.as_ref() else {
-            return;
-        };
-        while let Ok(res) = worker.res_rx.try_recv() {
-            if res.hash != self.full_inputs_hash {
-                continue;
-            }
-            self.full_highlight_cache = Some(FullHighlightCache {
-                hash: res.hash,
-                spans: res.highlighted,
-            });
-            self.full_highlight_pending = None;
-        }
-    }
-
-    fn ensure_highlight_worker(&mut self) {
-        if self.highlight_worker.is_some() {
-            return;
-        }
-        let Some(hi) = self.highlighter.clone() else {
-            return;
-        };
-
-        let (req_tx, req_rx) = mpsc::channel::<HighlightRequest>();
-        let (res_tx, res_rx) = mpsc::channel::<HighlightResult>();
-
-        thread::spawn(move || {
-            while let Ok(req) = req_rx.recv() {
-                let mut out: HashMap<usize, Vec<Span<'static>>> = HashMap::new();
-
-                let mut run_lang: Option<&str> = None;
-                let mut run_lines: Vec<&str> = Vec::new();
-                let mut run_indices: Vec<usize> = Vec::new();
-                let mut last_idx: Option<usize> = None;
-
-                let mut scratch = String::new();
-
-                let flush = |out: &mut HashMap<usize, Vec<Span<'static>>>,
-                             scratch: &mut String,
-                             lang: &mut Option<&str>,
-                             lines: &mut Vec<&str>,
-                             indices: &mut Vec<usize>| {
-                    if indices.is_empty() {
-                        return;
-                    }
-                    scratch.clear();
-                    for (i, line) in lines.iter().enumerate() {
-                        if i > 0 {
-                            scratch.push('\n');
-                        }
-                        scratch.push_str(line);
-                    }
-                    let highlighted = hi.highlight_text(*lang, scratch);
-                    for (i, idx) in indices.iter().copied().enumerate() {
-                        let spans = highlighted.get(i).cloned().unwrap_or_default();
-                        out.insert(idx, spans);
-                    }
-                    lines.clear();
-                    indices.clear();
-                };
-
-                for item in &req.items {
-                    let lang = item.lang.as_deref();
-                    if run_lang != lang || last_idx.is_some_and(|p| p + 1 != item.idx) {
-                        flush(&mut out, &mut scratch, &mut run_lang, &mut run_lines, &mut run_indices);
-                        run_lang = lang;
-                    }
-                    run_lines.push(item.content.as_str());
-                    run_indices.push(item.idx);
-                    last_idx = Some(item.idx);
-                }
-                flush(&mut out, &mut scratch, &mut run_lang, &mut run_lines, &mut run_indices);
-
-                let res = HighlightResult {
-                    hash: req.hash,
-                    highlighted: Arc::new(out),
-                };
-                if res_tx.send(res).is_err() {
-                    break;
-                }
-            }
-        });
-
-        self.highlight_worker = Some(HighlightWorker { req_tx, res_rx });
-    }
-
-    fn ensure_full_highlighting(&mut self) {
-        if !self.options.async_highlighting {
-            return;
-        }
-        if !self.options.highlight_hunks {
-            return;
-        }
-        let Some(_) = self.highlighter.as_ref() else {
-            return;
-        };
-        if self.parsed.lines.is_empty() {
-            return;
-        }
-
-        let hash = self.full_inputs_hash;
-        if let Some(cache) = self.full_highlight_cache.as_ref()
-            && cache.hash == hash
-        {
-            return;
-        }
-        if self.full_highlight_pending == Some(hash) {
-            return;
-        }
-
-        let mut items: Vec<HighlightRequestItem> = Vec::new();
-        for (idx, line) in self.parsed.lines.iter().enumerate() {
-            if !matches!(
-                line.kind,
-                DiffLineKind::Context | DiffLineKind::Add | DiffLineKind::Del
-            ) {
-                continue;
-            }
-            let lang = self
-                .language_override
-                .clone()
-                .or_else(|| line.language_hint.clone());
-            items.push(HighlightRequestItem {
-                idx,
-                lang,
-                content: line.content.clone(),
-            });
-        }
-
-        self.ensure_highlight_worker();
-        let Some(worker) = self.highlight_worker.as_ref() else {
-            return;
-        };
-
-        let req = HighlightRequest { hash, items };
-        if worker.req_tx.send(req).is_ok() {
-            self.full_highlight_pending = Some(hash);
-        } else {
-            self.highlight_worker = None;
-        }
-    }
-}
-
-fn count_highlightable_lines(parsed: &ParsedDiff, start: usize, end: usize) -> usize {
-    let mut n = 0usize;
-    for idx in start..end {
-        let Some(line) = parsed.lines.get(idx) else {
-            continue;
-        };
-        if matches!(
-            line.kind,
-            DiffLineKind::Context | DiffLineKind::Add | DiffLineKind::Del
-        ) {
-            n += 1;
-        }
-    }
-    n
 }
 
 fn highlight_inputs_hash(
@@ -1209,7 +964,10 @@ diff --git a/a.txt b/a.txt
         let mut buf = Buffer::empty(Rect::new(0, 0, 50, 2));
         view.render_ref(Rect::new(0, 0, 50, 2), &mut buf, &theme);
 
-        assert_eq!(buf.cell((49, 0)).expect("cell exists").style().bg, Some(Color::Blue));
+        assert_eq!(
+            buf.cell((49, 0)).expect("cell exists").style().bg,
+            Some(Color::Blue)
+        );
     }
 
     #[test]
@@ -1242,10 +1000,7 @@ diff --git a/main.rs b/main.rs
 ";
 
         let highlighter = Arc::new(CountingHighlighter::default());
-        let mut view = DiffView::with_options(DiffViewOptions {
-            async_highlighting: false,
-            ..Default::default()
-        });
+        let mut view = DiffView::new();
         view.set_highlighter(Some(highlighter.clone()));
         view.set_diff(diff);
 
@@ -1258,7 +1013,7 @@ diff --git a/main.rs b/main.rs
     }
 
     #[test]
-    fn transcript_lines_cache_full_highlighting_when_sync() {
+    fn transcript_lines_cache_highlighting() {
         #[derive(Default)]
         struct CountingHighlighter {
             calls: AtomicUsize,
@@ -1287,10 +1042,7 @@ diff --git a/main.rs b/main.rs
 ";
 
         let highlighter = Arc::new(CountingHighlighter::default());
-        let mut view = DiffView::with_options(DiffViewOptions {
-            async_highlighting: false,
-            ..Default::default()
-        });
+        let mut view = DiffView::new();
         view.set_highlighter(Some(highlighter.clone()));
         view.set_diff(diff);
 

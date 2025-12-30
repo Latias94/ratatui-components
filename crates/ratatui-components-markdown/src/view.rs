@@ -26,13 +26,10 @@ use ratatui_components_core::text::CodeHighlighter;
 use ratatui_components_core::theme::Theme;
 use ratatui_components_core::viewport::ViewportState;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
-use std::sync::mpsc;
-use std::thread;
 use unicode_width::UnicodeWidthChar;
 use unicode_width::UnicodeWidthStr;
 use url::Url;
@@ -196,8 +193,6 @@ pub struct MarkdownView {
     highlighter: Option<Arc<dyn CodeHighlighter + Send + Sync>>,
     highlight_cache: HashMap<u64, Arc<Vec<Vec<Span<'static>>>>>,
     code_block_index: HashMap<u64, usize>,
-    highlight_pending: HashSet<u64>,
-    highlight_worker: Option<HighlightWorker>,
     selection_anchor: Option<(usize, u32)>,
     selection: Option<((usize, u32), (usize, u32))>,
 }
@@ -216,22 +211,6 @@ struct CodeRef {
     content_start: usize,
 }
 
-struct HighlightWorker {
-    req_tx: mpsc::Sender<HighlightRequest>,
-    res_rx: mpsc::Receiver<HighlightResult>,
-}
-
-struct HighlightRequest {
-    key: u64,
-    language: Option<String>,
-    lines: Arc<Vec<String>>,
-}
-
-struct HighlightResult {
-    key: u64,
-    highlighted: Arc<Vec<Vec<Span<'static>>>>,
-}
-
 impl Clone for MarkdownView {
     fn clone(&self) -> Self {
         Self {
@@ -244,8 +223,6 @@ impl Clone for MarkdownView {
             highlighter: self.highlighter.clone(),
             highlight_cache: self.highlight_cache.clone(),
             code_block_index: self.code_block_index.clone(),
-            highlight_pending: HashSet::new(),
-            highlight_worker: None,
             selection_anchor: None,
             selection: None,
         }
@@ -293,15 +270,12 @@ impl MarkdownView {
         }
         self.cached_width = None;
         self.rendered.clear();
-        self.highlight_pending.clear();
     }
 
     pub fn set_highlighter(&mut self, highlighter: Option<Arc<dyn CodeHighlighter + Send + Sync>>) {
         self.highlighter = highlighter;
         self.cached_width = None;
         self.highlight_cache.clear();
-        self.highlight_pending.clear();
-        self.highlight_worker = None;
     }
 
     pub fn set_viewport(&mut self, area: Rect) {
@@ -637,85 +611,7 @@ impl MarkdownView {
         self.state.set_content(content_w, content_h);
     }
 
-    fn poll_highlight_results(&mut self) {
-        let Some(worker) = self.highlight_worker.as_ref() else {
-            return;
-        };
-        while let Ok(res) = worker.res_rx.try_recv() {
-            self.highlight_cache.insert(res.key, res.highlighted);
-            self.highlight_pending.remove(&res.key);
-        }
-    }
-
-    fn ensure_highlight_worker(&mut self) {
-        if self.highlight_worker.is_some() {
-            return;
-        }
-        let Some(hi) = self.highlighter.clone() else {
-            return;
-        };
-
-        let (req_tx, req_rx) = mpsc::channel::<HighlightRequest>();
-        let (res_tx, res_rx) = mpsc::channel::<HighlightResult>();
-
-        thread::spawn(move || {
-            while let Ok(req) = req_rx.recv() {
-                let mut text = String::new();
-                for (i, line) in req.lines.iter().enumerate() {
-                    if i > 0 {
-                        text.push('\n');
-                    }
-                    text.push_str(line);
-                }
-                let highlighted = hi.highlight_text(req.language.as_deref(), &text);
-                let res = HighlightResult {
-                    key: req.key,
-                    highlighted: Arc::new(highlighted),
-                };
-                if res_tx.send(res).is_err() {
-                    break;
-                }
-            }
-        });
-
-        self.highlight_worker = Some(HighlightWorker { req_tx, res_rx });
-    }
-
-    fn schedule_highlight(&mut self, key: u64) {
-        if self.highlight_cache.contains_key(&key) || self.highlight_pending.contains(&key) {
-            return;
-        }
-
-        let Some(&block_idx) = self.code_block_index.get(&key) else {
-            return;
-        };
-        let Some(Block::Code(code)) = self.blocks.get(block_idx) else {
-            return;
-        };
-        let language = code.language.clone();
-        let lines = code.lines.clone();
-
-        self.ensure_highlight_worker();
-        let Some(worker) = self.highlight_worker.as_ref() else {
-            return;
-        };
-
-        let req = HighlightRequest {
-            key,
-            language,
-            lines,
-        };
-
-        let tx = worker.req_tx.clone();
-        if tx.send(req).is_ok() {
-            self.highlight_pending.insert(key);
-        } else {
-            self.highlight_worker = None;
-        }
-    }
-
     fn ensure_all_highlights(&mut self) {
-        self.poll_highlight_results();
         let Some(hi) = self.highlighter.clone() else {
             return;
         };
@@ -741,7 +637,6 @@ impl MarkdownView {
     }
 
     fn materialize_highlights(&mut self, start: usize, end: usize, theme: &Theme) {
-        self.poll_highlight_results();
         let Some(hi) = self.highlighter.clone() else {
             return;
         };
@@ -779,17 +674,13 @@ impl MarkdownView {
                 let highlighted = hi.highlight_text(code.language.as_deref(), &text);
                 let highlighted = Arc::new(highlighted);
                 self.highlight_cache.insert(key, highlighted.clone());
-                self.highlight_pending.remove(&key);
                 sync_budget = sync_budget.saturating_sub(1);
                 Some(highlighted)
             });
 
             let highlighted = match highlighted {
                 Some(v) => v,
-                None => {
-                    self.schedule_highlight(key);
-                    continue;
-                }
+                None => continue,
             };
 
             let mut spans = self.rendered[idx].spans[..code_ref.content_start].to_vec();
