@@ -2,6 +2,8 @@ use crossterm::event::Event;
 use crossterm::event::KeyCode;
 use crossterm::event::KeyEventKind;
 use crossterm::event::KeyModifiers;
+use crossterm::event::MouseEventKind;
+use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
 use crossterm::terminal::EnterAlternateScreen;
 use crossterm::terminal::LeaveAlternateScreen;
 use crossterm::terminal::disable_raw_mode;
@@ -11,21 +13,25 @@ use ratatui::backend::CrosstermBackend;
 use ratatui::layout::Constraint;
 use ratatui::layout::Direction;
 use ratatui::layout::Layout;
+use ratatui::layout::Rect;
 use ratatui::style::Modifier;
 use ratatui::style::Style;
 use ratatui::style::Stylize;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
+use ratatui_components::diff::DiffView;
 use ratatui_components::help::HelpBar;
 use ratatui_components::help::HelpBarOptions;
+use ratatui_components::input::InputEvent;
+use ratatui_components::input::MouseButton;
+use ratatui_components::input::MouseEvent;
 use ratatui_components::keymap;
 use ratatui_components::keymap::Binding;
+use ratatui_components::markdown::view::MarkdownView;
+use ratatui_components::syntax::syntect::SyntectHighlighter;
 use ratatui_components::textarea::TextArea;
 use ratatui_components::textarea::TextAreaAction;
 use ratatui_components::theme::Theme;
-use ratatui_components_diff::DiffView;
-use ratatui_components_markdown::view::MarkdownView;
-use ratatui_components_syntax_syntect::SyntectHighlighter;
 use std::io;
 use std::sync::Arc;
 use std::time::Duration;
@@ -105,10 +111,17 @@ enum Action {
     PageUp,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct LayoutState {
+    markdown: ratatui::layout::Rect,
+    diff: ratatui::layout::Rect,
+    input: ratatui::layout::Rect,
+}
+
 fn main() -> io::Result<()> {
     let mut stdout = io::stdout();
     enable_raw_mode()?;
-    crossterm::execute!(stdout, EnterAlternateScreen)?;
+    crossterm::execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
@@ -117,7 +130,7 @@ fn main() -> io::Result<()> {
     let highlighter = Arc::new(SyntectHighlighter::new());
 
     let mut md =
-        MarkdownView::with_options(ratatui_components_markdown::view::MarkdownViewOptions {
+        MarkdownView::with_options(ratatui_components::markdown::view::MarkdownViewOptions {
             padding_left: 1,
             padding_right: 1,
             show_link_destinations: true,
@@ -148,7 +161,11 @@ fn main() -> io::Result<()> {
     );
 
     disable_raw_mode()?;
-    crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+    crossterm::execute!(
+        terminal.backend_mut(),
+        DisableMouseCapture,
+        LeaveAlternateScreen
+    )?;
     terminal.show_cursor()?;
     res
 }
@@ -164,39 +181,80 @@ fn run<B: ratatui::backend::Backend>(
     input: &mut TextArea,
     focus: &mut Focus,
 ) -> io::Result<()> {
+    let mut layout = LayoutState::default();
     loop {
         terminal.draw(|f| {
-            let cursor = ui(f, theme, help, md, diff, input, *focus);
+            let cursor = ui(f, theme, help, md, diff, input, *focus, &mut layout);
             if let Some((x, y)) = cursor {
                 f.set_cursor_position((x, y));
             }
         })?;
 
-        if crossterm::event::poll(Duration::from_millis(50))?
-            && let Event::Key(key) = crossterm::event::read()?
-        {
-            if key.kind != KeyEventKind::Press {
-                continue;
-            }
+        if !crossterm::event::poll(Duration::from_millis(50))? {
+            continue;
+        }
 
-            if let Some(action) = map_action(keymap, &key)
-                && handle_action(action, focus, md, diff, input)
-            {
-                return Ok(());
-            }
+        match crossterm::event::read()? {
+            Event::Key(key) => {
+                if key.kind != KeyEventKind::Press {
+                    continue;
+                }
 
-            if *focus == Focus::Input
-                && let Some(ev) = to_input_event(key)
-            {
-                match input.input(ev) {
-                    TextAreaAction::Submitted(text) => {
-                        md.set_markdown(&format!(
-                            "{SAMPLE_MARKDOWN}\n\n## Submitted\n\n```text\n{text}\n```\n"
-                        ));
+                if let Some(action) = map_action(keymap, &key)
+                    && handle_action(action, focus, md, diff, input)
+                {
+                    return Ok(());
+                }
+
+                if matches!(*focus, Focus::Markdown | Focus::Diff)
+                    && let Some(ev) = to_input_event(key)
+                {
+                    let selection_key = matches!(
+                        ev,
+                        InputEvent::Key(ratatui_components::input::KeyEvent {
+                            code: ratatui_components::input::KeyCode::Char('y')
+                                | ratatui_components::input::KeyCode::Esc,
+                            ..
+                        })
+                    );
+                    if selection_key {
+                        match *focus {
+                            Focus::Markdown => {
+                                let _ = md.handle_event_action(ev);
+                            }
+                            Focus::Diff => {
+                                let _ = diff.handle_event_action(ev);
+                            }
+                            Focus::Input => {}
+                        }
+                        continue;
                     }
-                    TextAreaAction::Changed | TextAreaAction::None => {}
+                }
+
+                if *focus == Focus::Input
+                    && let Some(ev) = to_input_event(key)
+                {
+                    match input.input(ev) {
+                        TextAreaAction::Submitted(text) => {
+                            md.set_markdown(&format!(
+                                "{SAMPLE_MARKDOWN}\n\n## Submitted\n\n```text\n{text}\n```\n"
+                            ));
+                        }
+                        TextAreaAction::Changed | TextAreaAction::None => {}
+                    }
                 }
             }
+            Event::Mouse(m) => {
+                let Some(ev) = to_mouse_event(m) else {
+                    continue;
+                };
+                if point_in(layout.markdown, ev.x, ev.y) {
+                    let _ = md.handle_event_action_in_area(layout.markdown, InputEvent::Mouse(ev));
+                } else if point_in(layout.diff, ev.x, ev.y) {
+                    let _ = diff.handle_event_action_in_area(layout.diff, InputEvent::Mouse(ev));
+                }
+            }
+            _ => {}
         }
     }
 }
@@ -209,6 +267,7 @@ fn ui(
     diff: &mut DiffView,
     input: &mut TextArea,
     focus: Focus,
+    layout: &mut LayoutState,
 ) -> Option<(u16, u16)> {
     let area = f.area();
     let [top, input_area, status] = Layout::default()
@@ -252,6 +311,10 @@ fn ui(
     let input_block = Block::default().title(input_title).borders(Borders::ALL);
     let input_inner = input_block.inner(input_area);
     f.render_widget(input_block, input_area);
+
+    layout.markdown = left_inner;
+    layout.diff = right_inner;
+    layout.input = input_inner;
 
     let buf = f.buffer_mut();
     md.render_ref(left_inner, buf, theme);
@@ -305,6 +368,46 @@ fn to_key_event(key: crossterm::event::KeyEvent) -> Option<ratatui_components::i
     };
 
     Some(E { code, modifiers })
+}
+
+fn point_in(r: Rect, x: u16, y: u16) -> bool {
+    x >= r.x && x < r.x + r.width && y >= r.y && y < r.y + r.height
+}
+
+fn to_mouse_event(m: crossterm::event::MouseEvent) -> Option<MouseEvent> {
+    let kind = match m.kind {
+        MouseEventKind::Down(b) => {
+            ratatui_components::input::MouseEventKind::Down(to_mouse_button(b)?)
+        }
+        MouseEventKind::Drag(b) => {
+            ratatui_components::input::MouseEventKind::Drag(to_mouse_button(b)?)
+        }
+        MouseEventKind::Up(b) => ratatui_components::input::MouseEventKind::Up(to_mouse_button(b)?),
+        MouseEventKind::ScrollUp => ratatui_components::input::MouseEventKind::ScrollUp,
+        MouseEventKind::ScrollDown => ratatui_components::input::MouseEventKind::ScrollDown,
+        _ => return None,
+    };
+
+    Some(MouseEvent {
+        x: m.column,
+        y: m.row,
+        kind,
+        modifiers: ratatui_components::input::KeyModifiers {
+            shift: m.modifiers.contains(crossterm::event::KeyModifiers::SHIFT),
+            ctrl: m
+                .modifiers
+                .contains(crossterm::event::KeyModifiers::CONTROL),
+            alt: m.modifiers.contains(crossterm::event::KeyModifiers::ALT),
+        },
+    })
+}
+
+fn to_mouse_button(b: crossterm::event::MouseButton) -> Option<MouseButton> {
+    match b {
+        crossterm::event::MouseButton::Left => Some(MouseButton::Left),
+        crossterm::event::MouseButton::Right => Some(MouseButton::Right),
+        crossterm::event::MouseButton::Middle => Some(MouseButton::Middle),
+    }
 }
 
 #[derive(Clone, Debug)]

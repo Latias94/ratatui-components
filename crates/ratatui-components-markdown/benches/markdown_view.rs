@@ -2,11 +2,10 @@ use criterion::Criterion;
 use criterion::black_box;
 use criterion::criterion_group;
 use criterion::criterion_main;
-use ratatui_components::text::NoHighlight;
-use ratatui_components::theme::Theme;
+use ratatui_components_core::text::NoHighlight;
+use ratatui_components_core::theme::Theme;
 use ratatui_components_markdown::view::MarkdownView;
 use ratatui_components_markdown::view::MarkdownViewOptions;
-use ratatui_components_syntax_syntect::SyntectHighlighter;
 use std::sync::Arc;
 
 fn sample_markdown(code_lines: usize) -> String {
@@ -77,8 +76,8 @@ fn bench_set_markdown_no_highlight(c: &mut Criterion) {
 fn bench_set_markdown_syntect(c: &mut Criterion) {
     let theme = Theme::default();
     let md = sample_markdown(200);
-    let hi = Arc::new(SyntectHighlighter::new());
-    c.bench_function("markdown_view/set_markdown+layout/syntect", |b| {
+    let hi = Arc::new(NoHighlight);
+    c.bench_function("markdown_view/set_markdown+layout/no_highlight_2", |b| {
         b.iter(|| {
             let mut view = MarkdownView::with_options(MarkdownViewOptions {
                 show_code_line_numbers: true,
@@ -96,28 +95,31 @@ fn bench_streaming_raw_newline_flush_syntect(c: &mut Criterion) {
     let theme = Theme::default();
     let md = sample_markdown(200);
     let deltas = chunks(&md, 3);
-    let hi = Arc::new(SyntectHighlighter::new());
+    let hi = Arc::new(NoHighlight);
 
-    c.bench_function("markdown_view/streaming/raw/newline_flush/syntect", |b| {
-        b.iter(|| {
-            let mut view = MarkdownView::with_options(MarkdownViewOptions {
-                show_code_line_numbers: true,
-                ..Default::default()
-            });
-            view.set_highlighter(Some(hi.clone()));
+    c.bench_function(
+        "markdown_view/streaming/raw/newline_flush/no_highlight",
+        |b| {
+            b.iter(|| {
+                let mut view = MarkdownView::with_options(MarkdownViewOptions {
+                    show_code_line_numbers: true,
+                    ..Default::default()
+                });
+                view.set_highlighter(Some(hi.clone()));
 
-            let mut raw = String::new();
-            for d in &deltas {
-                raw.push_str(d);
-                if d.contains('\n') {
-                    view.set_markdown(&raw);
-                    let _ = view.lines_for_width(96, &theme);
+                let mut raw = String::new();
+                for d in &deltas {
+                    raw.push_str(d);
+                    if d.contains('\n') {
+                        view.set_markdown(&raw);
+                        let _ = view.lines_for_width(96, &theme);
+                    }
                 }
-            }
 
-            black_box(raw.len());
-        })
-    });
+                black_box(raw.len());
+            })
+        },
+    );
 }
 
 criterion_group!(

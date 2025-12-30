@@ -2,12 +2,12 @@ use criterion::Criterion;
 use criterion::black_box;
 use criterion::criterion_group;
 use criterion::criterion_main;
-use ratatui_components::theme::Theme;
+use ratatui_components_core::text::NoHighlight;
+use ratatui_components_core::theme::Theme;
 use ratatui_components_markdown::streaming::MarkdownStream;
 use ratatui_components_markdown::streaming::MarkdownStreamView;
 use ratatui_components_markdown::view::MarkdownView;
 use ratatui_components_markdown::view::MarkdownViewOptions;
-use ratatui_components_syntax_syntect::SyntectHighlighter;
 use std::sync::Arc;
 
 fn sample_markdown(code_lines: usize) -> String {
@@ -61,10 +61,10 @@ fn bench_streaming_mdstream_newline_flush_syntect(c: &mut Criterion) {
     let theme = Theme::default();
     let md = sample_markdown(200);
     let deltas = chunks(&md, 3);
-    let hi = Arc::new(SyntectHighlighter::new());
+    let hi = Arc::new(NoHighlight);
 
     c.bench_function(
-        "markdown_view/streaming/mdstream/newline_flush/syntect",
+        "markdown_view/streaming/mdstream/newline_flush/no_highlight",
         |b| {
             b.iter(|| {
                 let mut view = MarkdownView::with_options(MarkdownViewOptions {
@@ -92,10 +92,10 @@ fn bench_stream_view_newline_flush_syntect(c: &mut Criterion) {
     let theme = Theme::default();
     let md = sample_markdown(200);
     let deltas = chunks(&md, 3);
-    let hi = Arc::new(SyntectHighlighter::new());
+    let hi = Arc::new(NoHighlight);
 
     c.bench_function(
-        "markdown_view/streaming/mdstream_view/newline_flush/syntect/trunc40",
+        "markdown_view/streaming/mdstream_view/newline_flush/no_highlight/trunc40",
         |b| {
             b.iter(|| {
                 let mut view = MarkdownStreamView::with_options(

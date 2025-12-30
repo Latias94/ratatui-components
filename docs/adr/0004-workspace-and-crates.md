@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted (revised)
 
 ## Context
 
@@ -15,22 +15,14 @@ when they only need small pieces.
 
 ## Decision
 
-Use a Cargo **workspace** and split by dependency weight:
-
-- `ratatui-components` (core): foundational components and shared abstractions (Theme, wrapping,
-  scrolling, keymaps).
-- `ratatui-components-markdown`: Markdown → styled lines/text, built on `pulldown-cmark`.
-- `ratatui-components-diff`: unified diff parsing/rendering and diff-specific UI helpers.
-- `ratatui-components-ansi`: ANSI escape parsing into ratatui `Text`.
-- `ratatui-components-syntax-*`: opt-in syntax highlighting backends.
-
-Each crate can still expose feature flags for further optional capabilities, but “heavy” should
-not be in `ratatui-components` by default.
+Use a Cargo workspace with a lightweight core crate, and keep heavier domains (Markdown, syntax
+highlighting backends) in opt-in crates. Provide a facade crate (`ratatui-components`) for a
+single-dependency UX via re-exports.
 
 ## Consequences
 
-- Pros: smaller default footprint; clearer ownership boundaries; faster builds for core users.
-- Cons: more crates to document/release; version coordination across crates.
+- Pros: simpler packaging and API surface; fewer moving parts for examples/docs; still keeps default deps small.
+- Cons: feature-flag matrix can grow; internal module boundaries require discipline.
 
 ## Alternatives Considered
 

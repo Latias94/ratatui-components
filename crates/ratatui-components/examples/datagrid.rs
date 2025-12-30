@@ -8,18 +8,17 @@ use crossterm::terminal::disable_raw_mode;
 use crossterm::terminal::enable_raw_mode;
 use ratatui::Terminal;
 use ratatui::backend::CrosstermBackend;
-use ratatui::layout::Constraint;
-use ratatui::layout::Direction;
-use ratatui::layout::Layout;
-use ratatui::style::Style;
+use ratatui::layout::Rect;
 use ratatui::text::Span;
 use ratatui::widgets::Block;
 use ratatui::widgets::Borders;
+use ratatui_components::datagrid::view::DataGridAction;
+use ratatui_components::datagrid::view::DataGridColumn;
+use ratatui_components::datagrid::view::DataGridView;
+use ratatui_components::datagrid::view::DataGridViewOptions;
 use ratatui_components::input::InputEvent;
+use ratatui_components::render;
 use ratatui_components::theme::Theme;
-use ratatui_components::virtual_list::VirtualListAction;
-use ratatui_components::virtual_list::VirtualListView;
-use ratatui_components::virtual_list::VirtualListViewOptions;
 use std::io;
 use std::time::Duration;
 
@@ -32,19 +31,20 @@ fn main() -> io::Result<()> {
     let mut terminal = Terminal::new(backend)?;
 
     let theme = Theme::default();
-    let items: Vec<String> = (0..200_000)
-        .map(|i| format!("{i:06}  The quick brown fox jumps over the lazy dog"))
+
+    let columns: Vec<DataGridColumn> = (0..200)
+        .map(|i| DataGridColumn::new(format!("col_{i:03}"), 12))
         .collect();
 
-    let mut list = VirtualListView::with_options(VirtualListViewOptions {
+    let mut grid = DataGridView::with_options(DataGridViewOptions {
         multi_select: true,
-        selection_follows_cursor: false,
+        selection_follows_cursor: true,
         ..Default::default()
     });
-    list.set_fixed_item_size(1);
-    list.set_cursor(Some(0), items.len());
+    grid.set_columns(columns);
+    grid.set_row_count(200_000);
 
-    let res = run(&mut terminal, &theme, &items, &mut list);
+    let res = run(&mut terminal, &theme, &mut grid);
 
     disable_raw_mode()?;
     crossterm::execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
@@ -55,53 +55,43 @@ fn main() -> io::Result<()> {
 fn run<B: ratatui::backend::Backend>(
     terminal: &mut Terminal<B>,
     theme: &Theme,
-    items: &[String],
-    list: &mut VirtualListView,
+    grid: &mut DataGridView,
 ) -> io::Result<()> {
     loop {
         terminal.draw(|f| {
             let area = f.area();
-            let [main, status] = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([Constraint::Min(1), Constraint::Length(1)])
-                .areas(area);
-
             let block = Block::default()
-                .title("VirtualListView (j/k, ↑/↓, PgUp/PgDn, g/G, Space, Enter, q)")
+                .title("DataGridView (hjkl/←→↑↓, PgUp/PgDn, g/G, Space/Shift+arrows, Enter, q)")
                 .borders(Borders::ALL);
-            let inner = block.inner(main);
-            f.render_widget(block, main);
+            let inner = block.inner(area);
+            f.render_widget(block, area);
 
             let buf = f.buffer_mut();
-            list.render(
-                inner,
-                buf,
-                theme,
-                items.len(),
-                |item_area, ctx, buf, theme| {
-                    if item_area.height == 0 {
-                        return None;
-                    }
-                    let s = items.get(ctx.index).map(String::as_str).unwrap_or("");
-                    let prefix = if ctx.is_selected { "[x] " } else { "[ ] " };
-                    let line = format!("{prefix}{s}");
-                    buf.set_stringn(
-                        item_area.x,
-                        item_area.y,
-                        line,
-                        item_area.width as usize,
-                        theme.text_primary,
-                    );
-                    None
-                },
+            let grid_area = Rect::new(
+                inner.x,
+                inner.y,
+                inner.width,
+                inner.height.saturating_sub(1),
             );
+            let status_area = Rect::new(inner.x, inner.y + grid_area.height, inner.width, 1);
 
-            let cursor = list.cursor().unwrap_or(0);
-            let pct = list.viewport.percent_y().unwrap_or(0);
-            let sel = list.selected().len();
-            let status_line = format!("cursor={cursor}  selected={sel}  scroll={pct}%");
-            let status_span = Span::styled(status_line, Style::default());
-            buf.set_span(status.x, status.y, &status_span, status.width);
+            grid.render(grid_area, buf, theme, |cell_area, ctx, buf, theme| {
+                if cell_area.width == 0 || cell_area.height == 0 {
+                    return;
+                }
+
+                let text = format!("r{} c{}", ctx.cell.row, ctx.cell.col);
+                let clipped = render::slice_by_cols(&text, ctx.clip_left, cell_area.width);
+                buf.set_stringn(
+                    cell_area.x,
+                    cell_area.y,
+                    clipped,
+                    cell_area.width as usize,
+                    theme.text_primary,
+                );
+            });
+
+            render_status(status_area, buf, theme, grid);
         })?;
 
         if crossterm::event::poll(Duration::from_millis(50))?
@@ -115,19 +105,45 @@ fn run<B: ratatui::backend::Backend>(
             }
 
             if let Some(ev) = to_input_event(key) {
-                match list.handle_event(ev, items.len()) {
-                    VirtualListAction::Activated(idx) => {
-                        if let Some(s) = items.get(idx) {
-                            eprintln!("Activated: {s}");
-                        }
+                match grid.handle_event(ev) {
+                    DataGridAction::Activated(cell) => {
+                        eprintln!("Activated cell: r{} c{}", cell.row, cell.col);
                     }
-                    VirtualListAction::Redraw
-                    | VirtualListAction::SelectionChanged
-                    | VirtualListAction::None => {}
+                    DataGridAction::Redraw
+                    | DataGridAction::SelectionChanged
+                    | DataGridAction::None => {}
                 }
             }
         }
     }
+}
+
+fn render_status(
+    area: Rect,
+    buf: &mut ratatui::buffer::Buffer,
+    theme: &Theme,
+    grid: &DataGridView,
+) {
+    if area.width == 0 || area.height == 0 {
+        return;
+    }
+    let cursor = grid
+        .cursor()
+        .map(|c| format!("r{} c{}", c.row, c.col))
+        .unwrap_or("-".to_string());
+    let sel = match grid.selection() {
+        ratatui_components::datagrid::view::Selection::None => "-".to_string(),
+        ratatui_components::datagrid::view::Selection::Single(c) => {
+            format!("r{} c{}", c.row, c.col)
+        }
+        ratatui_components::datagrid::view::Selection::Rect { start, end } => {
+            format!("r{}c{}..r{}c{}", start.row, start.col, end.row, end.col)
+        }
+    };
+    let pct = grid.state.percent_y().unwrap_or(0);
+    let s = format!("cursor={cursor}  selection={sel}  scroll={pct}%");
+    let span = Span::styled(s, theme.text_muted);
+    buf.set_span(area.x, area.y, &span, area.width);
 }
 
 fn to_input_event(key: crossterm::event::KeyEvent) -> Option<InputEvent> {

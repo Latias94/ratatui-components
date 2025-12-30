@@ -63,6 +63,7 @@ focus on **rich content** (Markdown + code + diff + ANSI output) and **core inpu
   - A transcript pane rendering Markdown and ANSI output
   - A diff preview pane
   - A composer TextArea at the bottom
+- Suggested: `cargo run -p ratatui-components --features transcript,syntect --example agent_mvp`
 - Components do not panic on arbitrary UTF-8 input.
 - Scrolling/wrapping remains stable when resizing the terminal.
 - Syntax highlighting does not re-run on every frame (cache where applicable).

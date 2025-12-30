@@ -14,10 +14,17 @@ use ratatui::style::Style;
 use ratatui::text::Line;
 use ratatui::text::Span;
 use ratatui::text::Text;
-use ratatui_components::render;
-use ratatui_components::text::CodeHighlighter;
-use ratatui_components::theme::Theme;
-use ratatui_components::viewport::ViewportState;
+use ratatui_components_core::input::InputEvent;
+use ratatui_components_core::input::MouseButton;
+use ratatui_components_core::input::MouseEvent;
+use ratatui_components_core::input::MouseEventKind;
+use ratatui_components_core::render;
+use ratatui_components_core::scroll::ScrollBindings;
+use ratatui_components_core::selection::SelectionAction;
+use ratatui_components_core::selection::SelectionBindings;
+use ratatui_components_core::text::CodeHighlighter;
+use ratatui_components_core::theme::Theme;
+use ratatui_components_core::viewport::ViewportState;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::hash_map::DefaultHasher;
@@ -141,6 +148,9 @@ pub struct MarkdownViewOptions {
     pub max_sync_highlight_blocks_per_frame: usize,
     pub base_url: Option<String>,
     pub link_destination_style: LinkDestinationStyle,
+    pub scroll: ScrollBindings,
+    pub enable_selection: bool,
+    pub selection: SelectionBindings,
 }
 
 impl Default for MarkdownViewOptions {
@@ -168,6 +178,9 @@ impl Default for MarkdownViewOptions {
             max_sync_highlight_blocks_per_frame: 1,
             base_url: None,
             link_destination_style: LinkDestinationStyle::Paren,
+            scroll: ScrollBindings::default(),
+            enable_selection: true,
+            selection: SelectionBindings::default(),
         }
     }
 }
@@ -185,6 +198,8 @@ pub struct MarkdownView {
     code_block_index: HashMap<u64, usize>,
     highlight_pending: HashSet<u64>,
     highlight_worker: Option<HighlightWorker>,
+    selection_anchor: Option<(usize, u32)>,
+    selection: Option<((usize, u32), (usize, u32))>,
 }
 
 #[derive(Clone, Debug)]
@@ -231,6 +246,8 @@ impl Clone for MarkdownView {
             code_block_index: self.code_block_index.clone(),
             highlight_pending: HashSet::new(),
             highlight_worker: None,
+            selection_anchor: None,
+            selection: None,
         }
     }
 }
@@ -310,6 +327,173 @@ impl MarkdownView {
         self.state.scroll_x_by(delta);
     }
 
+    pub fn handle_event_action(&mut self, event: InputEvent) -> SelectionAction {
+        match event {
+            InputEvent::Paste(_) => SelectionAction::None,
+            InputEvent::Mouse(m) => match m.kind {
+                MouseEventKind::ScrollUp => {
+                    self.state.scroll_y_by(-3);
+                    SelectionAction::Redraw
+                }
+                MouseEventKind::ScrollDown => {
+                    self.state.scroll_y_by(3);
+                    SelectionAction::Redraw
+                }
+                _ => SelectionAction::None,
+            },
+            InputEvent::Key(key) => {
+                if self.options.enable_selection && self.options.selection.is_clear(&key) {
+                    self.clear_selection();
+                    return SelectionAction::Redraw;
+                }
+                if self.options.enable_selection && self.options.selection.is_copy(&key) {
+                    return self
+                        .selected_text()
+                        .map(SelectionAction::CopyRequested)
+                        .unwrap_or(SelectionAction::None);
+                }
+                let Some(action) = self.options.scroll.action_for(&key) else {
+                    return SelectionAction::None;
+                };
+                self.options.scroll.apply(&mut self.state, action);
+                SelectionAction::Redraw
+            }
+        }
+    }
+
+    pub fn handle_event_action_in_area(
+        &mut self,
+        area: Rect,
+        event: InputEvent,
+    ) -> SelectionAction {
+        match event {
+            InputEvent::Paste(_) => SelectionAction::None,
+            InputEvent::Key(_) => self.handle_event_action(event),
+            InputEvent::Mouse(m) => {
+                if self.handle_mouse_event(area, m) {
+                    SelectionAction::Redraw
+                } else {
+                    SelectionAction::None
+                }
+            }
+        }
+    }
+
+    pub fn handle_mouse_event(&mut self, area: Rect, event: MouseEvent) -> bool {
+        if area.width == 0 || area.height == 0 {
+            return false;
+        }
+
+        match event.kind {
+            MouseEventKind::ScrollUp => {
+                self.state.scroll_y_by(-3);
+                return true;
+            }
+            MouseEventKind::ScrollDown => {
+                self.state.scroll_y_by(3);
+                return true;
+            }
+            _ => {}
+        }
+
+        if !self.options.enable_selection {
+            return false;
+        }
+
+        let (content_area, _) = if self.options.show_scrollbar && area.width >= 2 {
+            (
+                Rect::new(area.x, area.y, area.width - 1, area.height),
+                Some(area.x + area.width - 1),
+            )
+        } else {
+            (area, None)
+        };
+
+        let inner = inset_h(
+            content_area,
+            self.options.padding_left,
+            self.options.padding_right,
+        );
+
+        if event.x < inner.x
+            || event.x >= inner.x + inner.width
+            || event.y < content_area.y
+            || event.y >= content_area.y + content_area.height
+        {
+            return false;
+        }
+
+        let rel_x = (event.x - inner.x) as u32;
+        let rel_y = (event.y - content_area.y) as u32;
+        let line = self
+            .state
+            .y
+            .saturating_add(rel_y)
+            .min(self.rendered.len().saturating_sub(1) as u32) as usize;
+        let col = self.state.x.saturating_add(rel_x);
+
+        match event.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                self.selection_anchor = Some((line, col));
+                self.selection = Some(((line, col), (line, col)));
+                true
+            }
+            MouseEventKind::Drag(MouseButton::Left) => {
+                let Some(anchor) = self.selection_anchor else {
+                    return false;
+                };
+                self.selection = Some((anchor, (line, col)));
+                true
+            }
+            MouseEventKind::Up(MouseButton::Left) => {
+                let Some(anchor) = self.selection_anchor else {
+                    return false;
+                };
+                self.selection = Some((anchor, (line, col)));
+                self.selection_anchor = None;
+                true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn clear_selection(&mut self) {
+        self.selection_anchor = None;
+        self.selection = None;
+    }
+
+    pub fn selected_text(&mut self) -> Option<String> {
+        let ((l0, c0), (l1, c1)) = self.selection?;
+        let ((start_line, start_col), (end_line, end_col)) = normalize_sel((l0, c0), (l1, c1));
+
+        let theme = Theme::default();
+        self.ensure_layout(self.cached_width.unwrap_or(80), &theme);
+        self.materialize_highlights(0, self.rendered.len(), &theme);
+
+        let mut out = String::new();
+        for line_idx in start_line..=end_line {
+            let line = self.rendered.get(line_idx)?;
+            if line_idx > start_line {
+                out.push('\n');
+            }
+
+            let (from, to) = if start_line == end_line {
+                (start_col, end_col)
+            } else if line_idx == start_line {
+                (start_col, u32::MAX)
+            } else if line_idx == end_line {
+                (0, end_col)
+            } else {
+                (0, u32::MAX)
+            };
+
+            if let Some((bs, be)) = render::byte_range_for_cols_in_spans(&line.spans, from, to) {
+                out.push_str(&render::slice_spans_by_bytes(&line.spans, bs, be));
+            }
+        }
+        Some(out)
+    }
+
     pub fn render_ref(&mut self, area: Rect, buf: &mut Buffer, theme: &Theme) {
         if area.width == 0 || area.height == 0 {
             return;
@@ -344,6 +528,43 @@ impl MarkdownView {
                 theme.text_primary,
             );
             if let Some(line) = line {
+                if self.options.enable_selection
+                    && let Some(((l0, c0), (l1, c1))) = self.selection
+                {
+                    let ((start_line, start_col), (end_line, end_col)) =
+                        normalize_sel((l0, c0), (l1, c1));
+                    if idx >= start_line && idx <= end_line {
+                        let (from, to) = if start_line == end_line {
+                            (start_col, end_col)
+                        } else if idx == start_line {
+                            (start_col, u32::MAX)
+                        } else if idx == end_line {
+                            (0, end_col)
+                        } else {
+                            (0, u32::MAX)
+                        };
+                        if let Some((bs, be)) =
+                            render::byte_range_for_cols_in_spans(&line.spans, from, to)
+                        {
+                            let spans = render::apply_modifier_to_byte_ranges(
+                                line.spans.clone(),
+                                &[(bs, be)],
+                                Modifier::REVERSED,
+                            );
+                            render::render_spans_clipped(
+                                inner.x,
+                                y,
+                                self.state.x,
+                                inner.width,
+                                buf,
+                                &spans,
+                                theme.text_primary,
+                            );
+                            continue;
+                        }
+                    }
+                }
+
                 render::render_spans_clipped(
                     inner.x,
                     y,
@@ -572,6 +793,14 @@ impl MarkdownView {
             self.rendered[idx].spans = spans;
             self.rendered[idx].code_ref = None;
         }
+    }
+}
+
+fn normalize_sel(a: (usize, u32), b: (usize, u32)) -> ((usize, u32), (usize, u32)) {
+    if a.0 < b.0 || (a.0 == b.0 && a.1 <= b.1) {
+        (a, b)
+    } else {
+        (b, a)
     }
 }
 

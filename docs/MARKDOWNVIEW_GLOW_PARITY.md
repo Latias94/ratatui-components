@@ -1,6 +1,6 @@
 # MarkdownView ↔ Glow Parity Plan
 
-This document tracks feature parity between `ratatui-components-markdown::MarkdownView` and
+This document tracks feature parity between `ratatui-components::MarkdownView` (feature: `markdown`) and
 `glow` (repo-ref: `repo-ref/glow`) for practical, day-to-day Markdown documents.
 
 Scope: focus on **readability and information completeness** first, then converge on **visual
@@ -112,7 +112,7 @@ Workflow per item:
 1. Run our preview app:
    - `cargo run -p ratatui-components --example preview`
 2. Dump a plain-text render (useful for diffing against Glow output):
-   - `cargo run -p ratatui-components-markdown --example dump -- --width 80 docs/fixtures/glow_parity.md`
-   - (Optional) with base URL: `cargo run -p ratatui-components-markdown --example dump -- --width 80 --show-link-destinations --base-url https://example.com/docs/ docs/fixtures/glow_parity.md`
+   - `cargo run -p ratatui-components --features markdown --example dump -- --width 80 docs/fixtures/glow_parity.md`
+   - (Optional) with base URL: `cargo run -p ratatui-components --features markdown --example dump -- --width 80 --show-link-destinations --base-url https://example.com/docs/ docs/fixtures/glow_parity.md`
 3. (Optional) Render with Glow for comparison (outside of Rust build):
    - `glow docs/fixtures/glow_parity.md`

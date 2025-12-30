@@ -24,7 +24,7 @@ For streaming assistant messages, update the last entry instead of pushing a new
 
 The view keeps a per-entry render cache and only invalidates the changed entry on append.
 
-If you enable the `mdstream` feature on `ratatui-components-transcript`, the view also keeps an
+If you enable the `mdstream` feature (along with `transcript`) on `ratatui-components`, the view also keeps an
 incremental renderer for the currently streaming Markdown entry (committed blocks cached, pending
 tail updated). This reduces stutter when the last assistant message grows large, especially with
 open code fences.
@@ -39,7 +39,7 @@ You can tweak or disable this:
 
 Run the example with the feature enabled:
 
-- `cargo run -p ratatui-components-transcript --features mdstream --example transcript`
+- `cargo run -p ratatui-components --features transcript,mdstream,syntect --example transcript`
 
 ## MarkdownView
 
@@ -51,7 +51,7 @@ For best UX while streaming, still avoid calling `set_markdown()` on every tiny 
 coalescing strategy above.
 
 If you want to avoid re-parsing / re-layouting the entire document on each flush, use
-`ratatui-components-markdown` with the `mdstream` feature and render via `MarkdownStreamView`
+`ratatui-components` with the `mdstream` feature and render via `MarkdownStreamView`
 (incremental: committed blocks are rendered once, pending tail is updated):
 
 - `ratatui_components_markdown::streaming::MarkdownStreamView`

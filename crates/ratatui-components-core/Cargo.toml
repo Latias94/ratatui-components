@@ -1,0 +1,15 @@
+[package]
+name = "ratatui-components-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ratatui.workspace = true
+unicode-width.workspace = true
+virtualizer = { git = "https://github.com/Latias94/virtualizer", branch = "main" }
+crossterm = { workspace = true, optional = true }
+
+[features]
+default = []
+crossterm = ["dep:crossterm"]
+

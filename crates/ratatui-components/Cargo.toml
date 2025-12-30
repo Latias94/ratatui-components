@@ -6,10 +6,64 @@ edition.workspace = true
 [dependencies]
 ratatui.workspace = true
 unicode-width.workspace = true
-virtualizer = { git = "https://github.com/Latias94/virtualizer", branch = "main" }
+ratatui-components-core = { path = "../ratatui-components-core" }
+ansi-to-tui = { workspace = true, optional = true }
+similar = { workspace = true, optional = true }
+ratatui-components-markdown = { path = "../ratatui-components-markdown", optional = true }
+ratatui-components-syntax = { path = "../ratatui-components-syntax", optional = true }
+
+[features]
+default = []
+crossterm = ["ratatui-components-core/crossterm"]
+ansi = ["dep:ansi-to-tui"]
+diff = ["dep:similar"]
+markdown = ["dep:ratatui-components-markdown"]
+mdstream = ["markdown", "ratatui-components-markdown/mdstream"]
+transcript = ["ansi", "diff", "markdown"]
+syntect = ["dep:ratatui-components-syntax", "ratatui-components-syntax/syntect"]
+treesitter = ["dep:ratatui-components-syntax", "ratatui-components-syntax/treesitter"]
+
+treesitter-lang-bash = ["treesitter", "ratatui-components-syntax/treesitter-lang-bash"]
+treesitter-lang-c = ["treesitter", "ratatui-components-syntax/treesitter-lang-c"]
+treesitter-lang-cpp = ["treesitter", "ratatui-components-syntax/treesitter-lang-cpp"]
+treesitter-lang-css = ["treesitter", "ratatui-components-syntax/treesitter-lang-css"]
+treesitter-lang-go = ["treesitter", "ratatui-components-syntax/treesitter-lang-go"]
+treesitter-lang-html = ["treesitter", "ratatui-components-syntax/treesitter-lang-html"]
+treesitter-lang-java = ["treesitter", "ratatui-components-syntax/treesitter-lang-java"]
+treesitter-lang-javascript = ["treesitter", "ratatui-components-syntax/treesitter-lang-javascript"]
+treesitter-lang-json = ["treesitter", "ratatui-components-syntax/treesitter-lang-json"]
+treesitter-lang-python = ["treesitter", "ratatui-components-syntax/treesitter-lang-python"]
+treesitter-lang-rust = ["treesitter", "ratatui-components-syntax/treesitter-lang-rust"]
+treesitter-lang-toml = ["treesitter", "ratatui-components-syntax/treesitter-lang-toml"]
+treesitter-lang-typescript = ["treesitter", "ratatui-components-syntax/treesitter-lang-typescript"]
+treesitter-lang-yaml = ["treesitter", "ratatui-components-syntax/treesitter-lang-yaml"]
+
+treesitter-langs-common = ["treesitter", "ratatui-components-syntax/treesitter-langs-common"]
+treesitter-langs-all = ["treesitter", "ratatui-components-syntax/treesitter-langs-all"]
 
 [dev-dependencies]
 crossterm.workspace = true
-ratatui-components-diff = { path = "../ratatui-components-diff" }
-ratatui-components-markdown = { path = "../ratatui-components-markdown" }
-ratatui-components-syntax-syntect = { path = "../ratatui-components-syntax-syntect" }
+
+[[example]]
+name = "code_ansi"
+required-features = ["ansi", "syntect"]
+
+[[example]]
+name = "preview"
+required-features = ["diff", "markdown", "syntect"]
+
+[[example]]
+name = "transcript"
+required-features = ["transcript", "syntect"]
+
+[[example]]
+name = "agent_mvp"
+required-features = ["transcript", "syntect"]
+
+[[example]]
+name = "mdstream"
+required-features = ["mdstream", "syntect"]
+
+[[example]]
+name = "dump"
+required-features = ["markdown"]

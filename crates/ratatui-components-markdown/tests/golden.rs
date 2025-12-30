@@ -1,5 +1,5 @@
 use ratatui::text::Line;
-use ratatui_components::theme::Theme;
+use ratatui_components_core::theme::Theme;
 use ratatui_components_markdown::view::{
     LinkDestinationStyle, MarkdownView, MarkdownViewOptions, TableStyle,
 };

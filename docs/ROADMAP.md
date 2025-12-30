@@ -10,16 +10,15 @@
 - **Themeable**: consistent “semantic tokens” for styling across all components.
 - **Feature-gated**: keep the default dependency surface small.
 
-## Packaging Strategy (Workspace)
+## Packaging Strategy (Core + Optional Crates)
 
-Use a Cargo workspace to keep the “core” lightweight while allowing richer components to live in
-separate crates:
+Keep the foundational building blocks lightweight in a core crate, and put heavier dependencies in
+opt-in crates (still re-exportable through `ratatui-components` for convenience):
 
-- `ratatui-components` (core): viewport/scroll, keymaps, theming, basic list/input primitives
-- `ratatui-components-markdown`: Markdown parsing/rendering
-- `ratatui-components-diff`: unified diff parsing/rendering, optional intraline highlighting
-- `ratatui-components-ansi`: ANSI → ratatui `Text`
-- `ratatui-components-syntax-*`: optional syntax highlighting backends (e.g. syntect, tree-sitter)
+- `ratatui-components-core`: viewport/scroll, keymaps, theming, selection, input primitives, DataGrid, etc.
+- `ratatui-components-markdown`: Markdown parsing/rendering (`pulldown-cmark`, `url`, optional `mdstream`)
+- `ratatui-components-syntax`: syntax highlighting backends (feature-gated `syntect` / `treesitter` + language features)
+- `ratatui-components`: facade + higher-level composite views (diff/ansi/transcript) and re-exports
 
 ## Target Use Cases
 

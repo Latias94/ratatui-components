@@ -24,7 +24,7 @@ Define a small, stable highlighting abstraction in the ecosystem and keep the ba
   lines/spans.
 - Default behavior is “no highlighting” (plain code rendering).
 - Provide `syntect` backend as the first optional implementation (ship earlier, lower integration cost).
-- Add a tree-sitter backend later as a separate crate (`ratatui-components-syntax-treesitter`).
+- Add a tree-sitter backend later behind an opt-in Cargo feature (e.g. `treesitter`).
 
 DiffView uses the same abstraction for context lines and intraline highlights (when enabled).
 

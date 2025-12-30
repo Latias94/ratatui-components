@@ -2,18 +2,19 @@ use crate::view::MarkdownView;
 use crate::view::MarkdownViewOptions;
 use mdstream::DocumentState;
 use mdstream::MdStream;
-use mdstream::Options as MdStreamOptions;
 use mdstream::Update;
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
 use ratatui::text::Line;
-use ratatui_components::render;
-use ratatui_components::theme::Theme;
-use ratatui_components::viewport::ViewportState;
+use ratatui_components_core::render;
+use ratatui_components_core::theme::Theme;
+use ratatui_components_core::viewport::ViewportState;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 use unicode_width::UnicodeWidthStr;
+
+pub type MdStreamOptions = mdstream::Options;
 
 /// A small helper that keeps `mdstream` state and can produce a UI-friendly Markdown string.
 ///
@@ -164,7 +165,7 @@ impl MarkdownStreamView {
 
     pub fn set_highlighter(
         &mut self,
-        highlighter: Option<Arc<dyn ratatui_components::text::CodeHighlighter + Send + Sync>>,
+        highlighter: Option<Arc<dyn ratatui_components_core::text::CodeHighlighter + Send + Sync>>,
     ) {
         self.engine.set_highlighter(highlighter);
         self.reset_layout_cache();

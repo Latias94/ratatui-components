@@ -1,0 +1,69 @@
+[package]
+name = "ratatui-components-syntax"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ratatui.workspace = true
+ratatui-components-core = { path = "../ratatui-components-core" }
+
+syntect = { workspace = true, optional = true }
+tree-sitter = { workspace = true, optional = true }
+
+# Common tree-sitter language crates (opt-in).
+tree-sitter-bash = { version = "*", optional = true }
+tree-sitter-c = { version = "*", optional = true }
+tree-sitter-cpp = { version = "*", optional = true }
+tree-sitter-css = { version = "*", optional = true }
+tree-sitter-go = { version = "*", optional = true }
+tree-sitter-html = { version = "*", optional = true }
+tree-sitter-java = { version = "*", optional = true }
+tree-sitter-javascript = { version = "*", optional = true }
+tree-sitter-json = { version = "*", optional = true }
+tree-sitter-python = { version = "*", optional = true }
+tree-sitter-rust = { version = "*", optional = true }
+tree-sitter-toml = { version = "*", optional = true }
+tree-sitter-typescript = { version = "*", optional = true }
+tree-sitter-yaml = { version = "*", optional = true }
+
+[features]
+default = []
+
+syntect = ["dep:syntect"]
+treesitter = ["dep:tree-sitter"]
+
+treesitter-lang-bash = ["treesitter", "dep:tree-sitter-bash"]
+treesitter-lang-c = ["treesitter", "dep:tree-sitter-c"]
+treesitter-lang-cpp = ["treesitter", "dep:tree-sitter-cpp"]
+treesitter-lang-css = ["treesitter", "dep:tree-sitter-css"]
+treesitter-lang-go = ["treesitter", "dep:tree-sitter-go"]
+treesitter-lang-html = ["treesitter", "dep:tree-sitter-html"]
+treesitter-lang-java = ["treesitter", "dep:tree-sitter-java"]
+treesitter-lang-javascript = ["treesitter", "dep:tree-sitter-javascript"]
+treesitter-lang-json = ["treesitter", "dep:tree-sitter-json"]
+treesitter-lang-python = ["treesitter", "dep:tree-sitter-python"]
+treesitter-lang-rust = ["treesitter", "dep:tree-sitter-rust"]
+treesitter-lang-toml = ["treesitter", "dep:tree-sitter-toml"]
+treesitter-lang-typescript = ["treesitter", "dep:tree-sitter-typescript"]
+treesitter-lang-yaml = ["treesitter", "dep:tree-sitter-yaml"]
+
+treesitter-langs-common = [
+  "treesitter-lang-rust",
+  "treesitter-lang-python",
+  "treesitter-lang-javascript",
+  "treesitter-lang-typescript",
+  "treesitter-lang-json",
+  "treesitter-lang-yaml",
+  "treesitter-lang-toml",
+  "treesitter-lang-bash",
+]
+
+treesitter-langs-all = [
+  "treesitter-langs-common",
+  "treesitter-lang-c",
+  "treesitter-lang-cpp",
+  "treesitter-lang-css",
+  "treesitter-lang-go",
+  "treesitter-lang-html",
+  "treesitter-lang-java",
+]

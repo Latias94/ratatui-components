@@ -1,5 +1,10 @@
 [workspace]
-members = ["crates/*"]
+members = [
+  "crates/ratatui-components",
+  "crates/ratatui-components-core",
+  "crates/ratatui-components-markdown",
+  "crates/ratatui-components-syntax",
+]
 exclude = ["repo-ref/*"]
 resolver = "2"
 
