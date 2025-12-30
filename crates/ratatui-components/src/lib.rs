@@ -1,3 +1,21 @@
+//! High-level, batteries-included components for building modern TUIs with `ratatui`.
+//!
+//! This crate is a **facade**:
+//! - It re-exports `ratatui-components-core` (always on).
+//! - It conditionally exposes heavier components via feature flags (`markdown`, `syntect`,
+//!   `treesitter`, `ansi`, `diff`, `transcript`, ...).
+//!
+//! ## Design notes
+//!
+//! - Event-loop agnostic (no runtime): you call `handle_event*` and `render*` from your app loop.
+//! - Selection/copy is app-controlled: widgets emit `CopyRequested(String)` and do not touch the
+//!   system clipboard by default.
+//!
+//! ## Recommended usage
+//!
+//! - If you only need core widgets (TextArea, DataGrid, VirtualList, CodeView), depend on
+//!   `ratatui-components-core`.
+//! - If you want markdown/diff/transcript/ANSI views, depend on this crate and enable features.
 pub use ratatui_components_core::*;
 
 #[cfg(feature = "ansi")]
