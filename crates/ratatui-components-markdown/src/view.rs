@@ -3597,8 +3597,10 @@ mod tests {
         let theme = Theme::default();
         let highlighter = Arc::new(CountingHighlighter::default());
 
-        let mut opts = document::MarkdownRenderOptions::default();
-        opts.max_highlight_lines = 1;
+        let opts = document::MarkdownRenderOptions {
+            max_highlight_lines: 1,
+            ..Default::default()
+        };
 
         let doc = document::MarkdownDocument::parse(md, &opts);
         let _ = doc.render(80, &theme, &opts, Some(highlighter.clone()));

@@ -259,6 +259,7 @@ fn run<B: ratatui::backend::Backend<Error = io::Error>>(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn ui(
     f: &mut ratatui::Frame<'_>,
     theme: &Theme,

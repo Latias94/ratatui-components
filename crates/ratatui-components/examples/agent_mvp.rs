@@ -220,6 +220,7 @@ struct LayoutState {
     diff: ratatui::layout::Rect,
 }
 
+#[allow(clippy::too_many_arguments)]
 fn ui(
     f: &mut ratatui::Frame<'_>,
     theme: &Theme,

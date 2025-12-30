@@ -206,42 +206,39 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
             continue;
         }
 
-        match crossterm::event::read()? {
-            Event::Key(key) => {
-                if key.kind != KeyEventKind::Press {
-                    continue;
-                }
-                if key.code == KeyCode::Char('q') {
-                    return Ok(());
-                }
-                if key.code == KeyCode::Tab {
-                    app.focus = match app.focus {
-                        Focus::Markdown => Focus::Code,
-                        Focus::Code => Focus::Markdown,
-                    };
-                    continue;
-                }
-
-                let delta = match (key.modifiers, key.code) {
-                    (_, KeyCode::Up) | (_, KeyCode::Char('k')) => -1i16,
-                    (_, KeyCode::Down) | (_, KeyCode::Char('j')) => 1i16,
-                    (KeyModifiers::CONTROL, KeyCode::Char('u')) => -10i16,
-                    (KeyModifiers::CONTROL, KeyCode::Char('d')) => 10i16,
-                    _ => 0i16,
-                };
-                if delta == 0 {
-                    continue;
-                }
-
-                let scroll = match app.focus {
-                    Focus::Markdown => &mut app.md_scroll,
-                    Focus::Code => &mut app.code_scroll,
-                };
-                let y = scroll.0 as i16;
-                let y = (y + delta).max(0) as u16;
-                *scroll = (y, scroll.1);
+        if let Event::Key(key) = crossterm::event::read()? {
+            if key.kind != KeyEventKind::Press {
+                continue;
             }
-            _ => {}
+            if key.code == KeyCode::Char('q') {
+                return Ok(());
+            }
+            if key.code == KeyCode::Tab {
+                app.focus = match app.focus {
+                    Focus::Markdown => Focus::Code,
+                    Focus::Code => Focus::Markdown,
+                };
+                continue;
+            }
+
+            let delta = match (key.modifiers, key.code) {
+                (_, KeyCode::Up) | (_, KeyCode::Char('k')) => -1i16,
+                (_, KeyCode::Down) | (_, KeyCode::Char('j')) => 1i16,
+                (KeyModifiers::CONTROL, KeyCode::Char('u')) => -10i16,
+                (KeyModifiers::CONTROL, KeyCode::Char('d')) => 10i16,
+                _ => 0i16,
+            };
+            if delta == 0 {
+                continue;
+            }
+
+            let scroll = match app.focus {
+                Focus::Markdown => &mut app.md_scroll,
+                Focus::Code => &mut app.code_scroll,
+            };
+            let y = scroll.0 as i16;
+            let y = (y + delta).max(0) as u16;
+            *scroll = (y, scroll.1);
         }
     }
 }

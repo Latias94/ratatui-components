@@ -32,21 +32,12 @@ impl Default for CodeRenderOptions {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Default)]
 pub struct CodeRenderStyles {
     /// Base style applied to code spans (patched onto highlight styles).
     pub base: Style,
     /// Style used for the line number gutter.
     pub gutter: Style,
-}
-
-impl Default for CodeRenderStyles {
-    fn default() -> Self {
-        Self {
-            base: Style::default(),
-            gutter: Style::default(),
-        }
-    }
 }
 
 #[derive(Clone, Debug)]

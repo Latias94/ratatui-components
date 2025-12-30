@@ -299,7 +299,7 @@ impl CodeView {
     }
 
     pub fn set_code(&mut self, code: &str) {
-        let mut lines = code.lines().map(|l| normalize_tabs(l)).collect::<Vec<_>>();
+        let mut lines = code.lines().map(normalize_tabs).collect::<Vec<_>>();
         if code.ends_with('\n') {
             lines.push(String::new());
         }
@@ -321,8 +321,7 @@ impl CodeView {
         let h = lines.len() as u32;
         self.lines = lines;
         self.invalidate_highlighting();
-        self.state
-            .set_content(self.max_content_width as u32, h.max(0));
+        self.state.set_content(self.max_content_width as u32, h);
     }
 
     pub fn scroll_y_by(&mut self, delta: i32) {

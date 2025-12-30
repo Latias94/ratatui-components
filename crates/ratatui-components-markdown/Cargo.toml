@@ -29,6 +29,7 @@ mdstream = ["dep:mdstream"]
 [dev-dependencies]
 crossterm.workspace = true
 criterion = "0.5"
+ratatui-components-syntax = { path = "../ratatui-components-syntax", features = ["syntect"] }
 
 [[bench]]
 name = "markdown_view"

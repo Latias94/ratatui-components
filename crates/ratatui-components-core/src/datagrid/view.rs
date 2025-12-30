@@ -187,6 +187,30 @@ impl Default for DataGridView {
     }
 }
 
+#[derive(Clone, Copy)]
+struct DataGridBodyStyles {
+    base: Style,
+    cursor: Style,
+    selected: Style,
+    grid_line: Style,
+}
+
+struct ColSeparatorContext<'a> {
+    area: Rect,
+    scroll_x: u64,
+    col_count: usize,
+    buf: &'a mut Buffer,
+    style: Style,
+}
+
+struct RenderBodyContext<'a> {
+    area: Rect,
+    buf: &'a mut Buffer,
+    row_items: &'a [virtualizer::VirtualItem],
+    col_items: &'a [virtualizer::VirtualItem],
+    theme: &'a Theme,
+}
+
 impl DataGridView {
     pub fn new() -> Self {
         Self::default()
@@ -359,16 +383,21 @@ impl DataGridView {
             );
         }
 
-        self.render_body(
-            body_area,
+        let mut render_ctx = RenderBodyContext {
+            area: body_area,
             buf,
-            base_style,
-            cursor_style,
-            selected_style,
-            grid_line_style,
-            &self.row_items,
-            &self.col_items,
+            row_items: &self.row_items,
+            col_items: &self.col_items,
             theme,
+        };
+        self.render_body(
+            &mut render_ctx,
+            DataGridBodyStyles {
+                base: base_style,
+                cursor: cursor_style,
+                selected: selected_style,
+                grid_line: grid_line_style,
+            },
             &mut render_cell,
         );
 
@@ -670,36 +699,27 @@ impl DataGridView {
                 rect.x, rect.y, clip_left, rect.width, buf, &col.title, style,
             );
             if self.options.col_gap > 0 {
-                maybe_draw_col_separator(
+                let mut ctx = ColSeparatorContext {
                     area,
                     scroll_x,
-                    col_item.index,
-                    col_item.start,
-                    col_item.size,
-                    self.columns.len(),
+                    col_count: self.columns.len(),
                     buf,
-                    grid_line_style,
-                );
+                    style: grid_line_style,
+                };
+                maybe_draw_col_separator(&mut ctx, col_item.index, col_item.start, col_item.size);
             }
         }
     }
 
     fn render_body<F>(
         &self,
-        area: Rect,
-        buf: &mut Buffer,
-        base_style: Style,
-        cursor_style: Style,
-        selected_style: Style,
-        grid_line_style: Style,
-        row_items: &[virtualizer::VirtualItem],
-        col_items: &[virtualizer::VirtualItem],
-        theme: &Theme,
+        render_ctx: &mut RenderBodyContext<'_>,
+        styles: DataGridBodyStyles,
         render_cell: &mut F,
     ) where
         F: FnMut(Rect, DataGridCellContext, &mut Buffer, &Theme),
     {
-        if area.width == 0 || area.height == 0 {
+        if render_ctx.area.width == 0 || render_ctx.area.height == 0 {
             return;
         }
         if self.rows == 0 || self.columns.is_empty() {
@@ -709,13 +729,13 @@ impl DataGridView {
         let scroll_x = self.col_v.scroll_offset();
         let scroll_y = self.row_v.scroll_offset();
 
-        for row_item in row_items.iter().copied() {
+        for row_item in render_ctx.row_items.iter().copied() {
             let (row_rect, clip_top) =
-                clipped_rect_y(area, scroll_y, row_item.start, row_item.size);
+                clipped_rect_y(render_ctx.area, scroll_y, row_item.start, row_item.size);
             if row_rect.height == 0 {
                 continue;
             }
-            for col_item in col_items.iter().copied() {
+            for col_item in render_ctx.col_items.iter().copied() {
                 let (cell_rect, clip_left) =
                     clipped_rect_x(row_rect, scroll_x, col_item.start, col_item.size);
                 if cell_rect.width == 0 || cell_rect.height == 0 {
@@ -729,15 +749,15 @@ impl DataGridView {
                 let is_cursor = self.cursor == Some(cell);
                 let is_selected = self.selection.contains(cell);
                 let style = if is_cursor {
-                    cursor_style
+                    styles.cursor
                 } else if is_selected {
-                    selected_style
+                    styles.selected
                 } else {
-                    base_style
+                    styles.base
                 };
-                buf.set_style(cell_rect, style);
+                render_ctx.buf.set_style(cell_rect, style);
 
-                let ctx = DataGridCellContext {
+                let cell_ctx = DataGridCellContext {
                     cell,
                     col_width: self.columns[col_item.index].width,
                     row_start: row_item.start,
@@ -749,17 +769,20 @@ impl DataGridView {
                     is_cursor,
                     is_selected,
                 };
-                render_cell(cell_rect, ctx, buf, theme);
+                render_cell(cell_rect, cell_ctx, render_ctx.buf, render_ctx.theme);
                 if self.options.col_gap > 0 {
-                    maybe_draw_col_separator(
-                        row_rect,
+                    let mut sep_ctx = ColSeparatorContext {
+                        area: row_rect,
                         scroll_x,
+                        col_count: self.columns.len(),
+                        buf: render_ctx.buf,
+                        style: styles.grid_line,
+                    };
+                    maybe_draw_col_separator(
+                        &mut sep_ctx,
                         col_item.index,
                         col_item.start,
                         col_item.size,
-                        self.columns.len(),
-                        buf,
-                        grid_line_style,
                     );
                 }
             }
@@ -771,13 +794,10 @@ fn clamp_cursor(cursor: Option<Cell>, rows: usize, cols: usize) -> Option<Cell> 
     if rows == 0 || cols == 0 {
         return None;
     }
-    match cursor {
-        None => None,
-        Some(c) => Some(Cell {
-            row: c.row.min(rows - 1),
-            col: c.col.min(cols - 1),
-        }),
-    }
+    cursor.map(|c| Cell {
+        row: c.row.min(rows - 1),
+        col: c.col.min(cols - 1),
+    })
 }
 
 fn clipped_rect_x(area: Rect, scroll_x: u64, start: u64, size: u32) -> (Rect, u32) {
@@ -805,28 +825,29 @@ fn clipped_rect_y(area: Rect, scroll_y: u64, start: u64, size: u32) -> (Rect, u3
 }
 
 fn maybe_draw_col_separator(
-    area: Rect,
-    scroll_x: u64,
+    ctx: &mut ColSeparatorContext<'_>,
     col_index: usize,
     col_start: u64,
     col_size: u32,
-    col_count: usize,
-    buf: &mut Buffer,
-    style: Style,
 ) {
-    if col_index + 1 >= col_count {
+    if col_index + 1 >= ctx.col_count {
         return;
     }
-    let sep_x_rel = (col_start + col_size as u64) as i64 - scroll_x as i64;
+    let sep_x_rel = (col_start + col_size as u64) as i64 - ctx.scroll_x as i64;
     if sep_x_rel < 0 {
         return;
     }
     let sep_x = sep_x_rel as u16;
-    if sep_x >= area.width {
+    if sep_x >= ctx.area.width {
         return;
     }
-    for dy in 0..area.height {
-        buf.set_span(area.x + sep_x, area.y + dy, &Span::styled("│", style), 1);
+    for dy in 0..ctx.area.height {
+        ctx.buf.set_span(
+            ctx.area.x + sep_x,
+            ctx.area.y + dy,
+            &Span::styled("│", ctx.style),
+            1,
+        );
     }
 }
 

@@ -460,12 +460,8 @@ impl TreeSitterHighlighter {
     }
 
     fn entry_for(&self, language: Option<&str>) -> Option<&LanguageEntry> {
-        let Some(lang) = language else {
-            return None;
-        };
-        let Some(&idx) = self.keys.get(lang) else {
-            return None;
-        };
+        let lang = language?;
+        let &idx = self.keys.get(lang)?;
         self.languages.get(idx)
     }
 
@@ -517,7 +513,7 @@ impl CodeHighlighter for TreeSitterHighlighter {
                 Ok(tree_sitter_highlight::HighlightEvent::Source { start, end }) => {
                     let style = stack
                         .last()
-                        .and_then(|h| entry.styles.get(h.0 as usize).copied())
+                        .and_then(|h| entry.styles.get(h.0).copied())
                         .unwrap_or_default();
 
                     let mut s = &text[start..end];

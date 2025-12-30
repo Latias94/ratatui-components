@@ -146,10 +146,12 @@ impl SyntectHighlighter {
             #[cfg(feature = "termprofile")]
             {
                 let c = CoreColor::Rgb(color.r, color.g, color.b);
-                return self.profile.adapt_color(c).map(core_color_to_ratatui);
+                self.profile.adapt_color(c).map(core_color_to_ratatui)
             }
             #[cfg(not(feature = "termprofile"))]
-            return Some(Color::Rgb(color.r, color.g, color.b));
+            {
+                Some(Color::Rgb(color.r, color.g, color.b))
+            }
         }
     }
 }

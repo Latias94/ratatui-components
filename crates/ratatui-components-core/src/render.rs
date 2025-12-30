@@ -66,7 +66,7 @@ pub fn render_str_clipped(
     for ch in input.chars() {
         if ch == '\t' {
             for _ in 0..4 {
-                if col + 1 <= start_col {
+                if col < start_col {
                     col += 1;
                     continue;
                 }
@@ -152,7 +152,7 @@ pub fn render_spans_clipped(
         for ch in span.content.chars() {
             if ch == '\t' {
                 for _ in 0..4 {
-                    if col + 1 <= start_col {
+                    if col < start_col {
                         col += 1;
                         continue;
                     }

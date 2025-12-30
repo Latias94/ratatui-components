@@ -8,6 +8,7 @@ use ratatui_components_markdown::streaming::MarkdownStream;
 use ratatui_components_markdown::streaming::MarkdownStreamView;
 use ratatui_components_markdown::view::MarkdownView;
 use ratatui_components_markdown::view::MarkdownViewOptions;
+use ratatui_components_syntax::syntect::SyntectHighlighter;
 use std::sync::Arc;
 
 fn sample_markdown(code_lines: usize) -> String {

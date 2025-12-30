@@ -295,7 +295,7 @@ impl VirtualListView {
 
         let content_w = self
             .content_w
-            .unwrap_or_else(|| content_area.width as u32)
+            .unwrap_or(content_area.width as u32)
             .max(content_area.width as u32);
         self.viewport.set_content(content_w, self.total_size_u32());
         self.viewport.y = self.virtualizer.scroll_offset().min(u32::MAX as u64) as u32;
@@ -561,7 +561,7 @@ impl VirtualListView {
 
         let content_w = self
             .content_w
-            .unwrap_or_else(|| self.viewport.viewport_w as u32)
+            .unwrap_or(self.viewport.viewport_w as u32)
             .max(self.viewport.viewport_w as u32);
         self.viewport.set_content(content_w, self.total_size_u32());
     }
