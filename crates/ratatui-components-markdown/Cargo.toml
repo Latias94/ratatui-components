@@ -2,6 +2,17 @@
 name = "ratatui-components-markdown"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/ratatui-components-markdown"
+description = "Markdown rendering and view components for ratatui-components."
+readme = "../../README.md"
+keywords = ["ratatui", "tui", "markdown", "terminal", "components"]
+categories = ["command-line-interface", "text-processing"]
+exclude = ["tests/**", "benches/**"]
 
 [dependencies]
 pulldown-cmark.workspace = true
@@ -27,3 +38,9 @@ harness = false
 name = "markdown_view_mdstream"
 harness = false
 required-features = ["mdstream"]
+
+[package.metadata.docs.rs]
+no-default-features = true
+all-features = false
+features = []
+rustdoc-args = ["--cfg", "docsrs"]

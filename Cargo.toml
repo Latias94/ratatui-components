@@ -11,6 +11,12 @@ resolver = "2"
 [workspace.package]
 edition = "2024"
 version = "0.1.0"
+rust-version = "1.85"
+authors = ["Mingzhen Zhuang <superfrankie621@gmail.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/Latias94/ratatui-components"
+homepage = "https://github.com/Latias94/ratatui-components"
+documentation = "https://docs.rs/ratatui-components"
 
 [workspace.dependencies]
 ratatui = "0.29"
@@ -23,3 +29,4 @@ crossterm = "0.28"
 similar = "2"
 url = "2"
 termprofile = "0.2"
+virtualizer = { git = "https://github.com/Latias94/virtualizer", rev = "686f97350c88e1b055338a06e2ba7891461f80d9" }

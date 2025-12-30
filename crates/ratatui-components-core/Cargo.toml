@@ -2,14 +2,30 @@
 name = "ratatui-components-core"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/ratatui-components-core"
+description = "Core primitives for ratatui-components: theming, viewport, input, selection, and widgets."
+readme = "../../README.md"
+keywords = ["ratatui", "tui", "terminal", "widgets", "components"]
+categories = ["command-line-interface"]
+exclude = ["tests/**", "benches/**"]
 
 [dependencies]
 ratatui.workspace = true
 unicode-width.workspace = true
-virtualizer = { git = "https://github.com/Latias94/virtualizer", branch = "main" }
+virtualizer.workspace = true
 crossterm = { workspace = true, optional = true }
 
 [features]
 default = []
 crossterm = ["dep:crossterm"]
 
+[package.metadata.docs.rs]
+no-default-features = true
+all-features = false
+features = []
+rustdoc-args = ["--cfg", "docsrs"]

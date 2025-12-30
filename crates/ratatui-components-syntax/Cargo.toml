@@ -2,6 +2,17 @@
 name = "ratatui-components-syntax"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/ratatui-components-syntax"
+description = "Syntax highlighting abstractions and backends for ratatui-components."
+readme = "../../README.md"
+keywords = ["ratatui", "tui", "syntax-highlighting", "terminal", "components"]
+categories = ["command-line-interface", "text-processing"]
+exclude = ["tests/**", "benches/**"]
 
 [dependencies]
 ratatui.workspace = true
@@ -71,3 +82,9 @@ treesitter-langs-all = [
   "treesitter-lang-html",
   "treesitter-lang-java",
 ]
+
+[package.metadata.docs.rs]
+no-default-features = true
+all-features = false
+features = []
+rustdoc-args = ["--cfg", "docsrs"]

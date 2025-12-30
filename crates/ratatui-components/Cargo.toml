@@ -2,6 +2,17 @@
 name = "ratatui-components"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+description = "High-level, batteries-included components for building modern TUIs with ratatui."
+readme = "../../README.md"
+keywords = ["ratatui", "tui", "terminal", "widgets", "components"]
+categories = ["command-line-interface"]
+exclude = ["tests/**", "benches/**"]
 
 [dependencies]
 ratatui.workspace = true
@@ -72,3 +83,9 @@ required-features = ["markdown"]
 [[example]]
 name = "render_core"
 required-features = ["markdown"]
+
+[package.metadata.docs.rs]
+no-default-features = true
+all-features = false
+features = []
+rustdoc-args = ["--cfg", "docsrs"]
