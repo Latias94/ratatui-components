@@ -182,6 +182,251 @@ impl Default for MarkdownViewOptions {
     }
 }
 
+pub mod document {
+    //! A lightweight, reusable markdown rendering core.
+    //!
+    //! This module is intended for users who want to control layout themselves (multi-pane,
+    //! custom scroll containers, virtualization, etc.) while reusing the same parsing and
+    //! rendering logic as [`super::MarkdownView`].
+    //!
+    //! It intentionally does **not** expose lower-level internals (blocks/segments). APIs are
+    //! expected to evolve until a 1.0 release.
+
+    use super::*;
+
+    #[derive(Clone, Debug)]
+    pub struct MarkdownRenderOptions {
+        pub wrap_prose: bool,
+        pub preserve_new_lines: bool,
+        pub show_link_destinations: bool,
+        pub show_heading_markers: bool,
+        pub glow_compat_relative_paths: bool,
+        pub blockquote_prefix: String,
+        pub table_style: TableStyle,
+        pub glow_compat_quote_list_wrap: bool,
+        pub glow_compat_loose_list_join: bool,
+        pub glow_compat_post_list_blank_lines: u8,
+        pub footnotes_at_end: bool,
+        pub code_block_indent: u16,
+        pub code_block_indent_in_blockquote: u16,
+        pub footnote_hanging_indent: bool,
+        pub show_code_line_numbers: bool,
+        pub max_highlight_lines: usize,
+        pub base_url: Option<String>,
+        pub link_destination_style: LinkDestinationStyle,
+    }
+
+    impl Default for MarkdownRenderOptions {
+        fn default() -> Self {
+            Self {
+                wrap_prose: true,
+                preserve_new_lines: false,
+                show_link_destinations: false,
+                show_heading_markers: false,
+                glow_compat_relative_paths: false,
+                blockquote_prefix: "| ".to_string(),
+                table_style: TableStyle::Glow,
+                glow_compat_quote_list_wrap: true,
+                glow_compat_loose_list_join: false,
+                glow_compat_post_list_blank_lines: 0,
+                footnotes_at_end: false,
+                code_block_indent: 4,
+                code_block_indent_in_blockquote: 2,
+                footnote_hanging_indent: true,
+                show_code_line_numbers: false,
+                max_highlight_lines: 200,
+                base_url: None,
+                link_destination_style: LinkDestinationStyle::Paren,
+            }
+        }
+    }
+
+    impl From<&MarkdownViewOptions> for MarkdownRenderOptions {
+        fn from(value: &MarkdownViewOptions) -> Self {
+            Self {
+                wrap_prose: value.wrap_prose,
+                preserve_new_lines: value.preserve_new_lines,
+                show_link_destinations: value.show_link_destinations,
+                show_heading_markers: value.show_heading_markers,
+                glow_compat_relative_paths: value.glow_compat_relative_paths,
+                blockquote_prefix: value.blockquote_prefix.clone(),
+                table_style: value.table_style,
+                glow_compat_quote_list_wrap: value.glow_compat_quote_list_wrap,
+                glow_compat_loose_list_join: value.glow_compat_loose_list_join,
+                glow_compat_post_list_blank_lines: value.glow_compat_post_list_blank_lines,
+                footnotes_at_end: value.footnotes_at_end,
+                code_block_indent: value.code_block_indent,
+                code_block_indent_in_blockquote: value.code_block_indent_in_blockquote,
+                footnote_hanging_indent: value.footnote_hanging_indent,
+                show_code_line_numbers: value.show_code_line_numbers,
+                max_highlight_lines: value.max_sync_highlight_lines,
+                base_url: value.base_url.clone(),
+                link_destination_style: value.link_destination_style,
+            }
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct MarkdownDocument {
+        source: String,
+        blocks: Vec<Block>,
+    }
+
+    impl MarkdownDocument {
+        /// Parses `source` into an opaque document representation.
+        ///
+        /// Note: options that affect parsing (links, footnotes, relative path resolution, etc.)
+        /// are applied during `parse`. If you change those options, re-parse the document.
+        pub fn parse(source: impl Into<String>, options: &MarkdownRenderOptions) -> Self {
+            let source = source.into();
+            let blocks = parse_markdown_blocks(
+                &source,
+                ParseOptions {
+                    preserve_new_lines: options.preserve_new_lines,
+                    show_link_destinations: options.show_link_destinations,
+                    show_heading_markers: options.show_heading_markers,
+                    glow_compat_relative_paths: options.glow_compat_relative_paths,
+                    link_destination_style: options.link_destination_style,
+                    glow_compat_quote_list_wrap: options.glow_compat_quote_list_wrap,
+                    glow_compat_loose_list_join: options.glow_compat_loose_list_join,
+                    glow_compat_post_list_blank_lines: options.glow_compat_post_list_blank_lines,
+                    footnotes_at_end: options.footnotes_at_end,
+                    blockquote_prefix: options.blockquote_prefix.as_str(),
+                    code_block_indent: options.code_block_indent,
+                    code_block_indent_in_blockquote: options.code_block_indent_in_blockquote,
+                    footnote_hanging_indent: options.footnote_hanging_indent,
+                    base_url: options.base_url.as_deref(),
+                },
+            );
+
+            Self { source, blocks }
+        }
+
+        pub fn source(&self) -> &str {
+            &self.source
+        }
+
+        pub fn render(
+            &self,
+            width: u16,
+            theme: &Theme,
+            options: &MarkdownRenderOptions,
+            highlighter: Option<Arc<dyn CodeHighlighter + Send + Sync>>,
+        ) -> RenderedMarkdown {
+            if width == 0 {
+                return RenderedMarkdown {
+                    text: Text::default(),
+                    content_width: 0,
+                    content_height: 0,
+                };
+            }
+
+            let mut rendered = layout_blocks(
+                &self.blocks,
+                width,
+                options.wrap_prose,
+                theme,
+                options.show_code_line_numbers,
+                options.table_style,
+            );
+
+            if let Some(hi) = highlighter {
+                let mut highlight_cache: HashMap<u64, Arc<Vec<Vec<Span<'static>>>>> =
+                    HashMap::new();
+                for block in &self.blocks {
+                    let Block::Code(code) = block else {
+                        continue;
+                    };
+                    if highlight_cache.contains_key(&code.highlight_key) {
+                        continue;
+                    }
+                    if code.lines.len() > options.max_highlight_lines {
+                        continue;
+                    }
+
+                    let mut text = String::new();
+                    for (i, line) in code.lines.iter().enumerate() {
+                        if i > 0 {
+                            text.push('\n');
+                        }
+                        text.push_str(line);
+                    }
+                    let highlighted = hi.highlight_text(code.language.as_deref(), &text);
+                    highlight_cache.insert(code.highlight_key, Arc::new(highlighted));
+                }
+
+                for line in &mut rendered {
+                    let Some(code_ref) = line.code_ref else {
+                        continue;
+                    };
+                    let key = code_ref.highlight_key;
+                    let Some(highlighted) = highlight_cache.get(&key) else {
+                        line.code_ref = None;
+                        continue;
+                    };
+                    let mut spans = line.spans[..code_ref.content_start].to_vec();
+                    let content = highlighted
+                        .get(code_ref.line_idx)
+                        .cloned()
+                        .unwrap_or_default();
+                    if content.is_empty() {
+                        spans.extend(line.spans[code_ref.content_start..].iter().cloned());
+                    } else {
+                        spans.extend(patch_spans_style(content, theme.code_inline));
+                    }
+                    line.spans = spans;
+                    line.code_ref = None;
+                }
+            } else {
+                for line in &mut rendered {
+                    line.code_ref = None;
+                }
+            }
+
+            let content_height = rendered.len() as u32;
+            let content_width = rendered
+                .iter()
+                .map(|l| UnicodeWidthStr::width(l.plain.as_str()) as u32)
+                .max()
+                .unwrap_or(0);
+
+            let text = Text::from(
+                rendered
+                    .into_iter()
+                    .map(|l| Line::from(l.spans))
+                    .collect::<Vec<_>>(),
+            );
+
+            RenderedMarkdown {
+                text,
+                content_width,
+                content_height,
+            }
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct RenderedMarkdown {
+        text: Text<'static>,
+        content_width: u32,
+        content_height: u32,
+    }
+
+    impl RenderedMarkdown {
+        pub fn text(&self) -> &Text<'static> {
+            &self.text
+        }
+
+        pub fn into_text(self) -> Text<'static> {
+            self.text
+        }
+
+        pub fn content_size(&self) -> (u32, u32) {
+            (self.content_width, self.content_height)
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct MarkdownView {
     source: String,
@@ -3180,5 +3425,55 @@ mod tests {
         let _ = view.lines_for_width(40, &theme);
 
         assert_eq!(highlighter.calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn document_render_matches_view_lines_for_width() {
+        let md = "# Title\n\nHello **world**.\n";
+        let theme = Theme::default();
+
+        let opts = document::MarkdownRenderOptions::default();
+        let doc = document::MarkdownDocument::parse(md, &opts);
+        let rendered = doc.render(40, &theme, &opts, None);
+
+        let mut view = MarkdownView::new();
+        view.set_markdown(md);
+        let lines = view.lines_for_width(40, &theme);
+
+        assert_eq!(rendered.text().lines.as_slice(), lines.as_slice());
+    }
+
+    #[test]
+    fn document_skips_highlighting_when_over_limit() {
+        #[derive(Default)]
+        struct CountingHighlighter {
+            calls: AtomicUsize,
+        }
+
+        impl CodeHighlighter for CountingHighlighter {
+            fn highlight_lines(
+                &self,
+                _language: Option<&str>,
+                lines: &[&str],
+            ) -> Vec<Vec<Span<'static>>> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                lines
+                    .iter()
+                    .map(|l| vec![Span::raw((*l).to_string())])
+                    .collect()
+            }
+        }
+
+        let md = "```rs\nline1\nline2\n```\n";
+        let theme = Theme::default();
+        let highlighter = Arc::new(CountingHighlighter::default());
+
+        let mut opts = document::MarkdownRenderOptions::default();
+        opts.max_highlight_lines = 1;
+
+        let doc = document::MarkdownDocument::parse(md, &opts);
+        let _ = doc.render(80, &theme, &opts, Some(highlighter.clone()));
+
+        assert_eq!(highlighter.calls.load(Ordering::SeqCst), 0);
     }
 }

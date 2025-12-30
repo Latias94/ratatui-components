@@ -4,3 +4,5 @@ pub mod render;
 pub mod streaming;
 
 pub mod view;
+
+pub use view::document;

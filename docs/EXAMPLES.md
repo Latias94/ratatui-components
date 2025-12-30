@@ -1,5 +1,21 @@
 # Examples
 
+## Render Core (MarkdownDocument)
+
+If you want full control over layout (multi-pane UIs, custom scrolling, virtualization), use the
+rendering core directly and render the returned `Text` wherever you want:
+
+```rust
+use ratatui::text::Text;
+use ratatui_components_core::theme::Theme;
+use ratatui_components_markdown::document::{MarkdownDocument, MarkdownRenderOptions};
+
+let opts = MarkdownRenderOptions::default();
+let doc = MarkdownDocument::parse("# Title\n\nHello **world**.\n", &opts);
+let rendered = doc.render(80, &Theme::default(), &opts, None);
+let text: Text<'static> = rendered.into_text();
+```
+
 ## Preview (MarkdownView + DiffView + TextArea)
 
 Run:
