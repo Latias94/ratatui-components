@@ -21,12 +21,14 @@ pub enum DataGridAction {
     SelectionChanged,
 }
 
+/// A grid cell address.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Cell {
     pub row: usize,
     pub col: usize,
 }
 
+/// Selection states supported by [`DataGridView`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Selection {
     None,
@@ -56,6 +58,7 @@ impl Selection {
     }
 }
 
+/// Column configuration for [`DataGridView`].
 #[derive(Clone, Debug)]
 pub struct DataGridColumn {
     pub title: String,
@@ -71,6 +74,10 @@ impl DataGridColumn {
     }
 }
 
+/// Options for [`DataGridView`].
+///
+/// This widget virtualizes both rows and columns via the `virtualizer` crate and delegates cell
+/// rendering to a user callback.
 #[derive(Clone, Debug)]
 pub struct DataGridViewOptions {
     pub show_header: bool,
@@ -110,6 +117,7 @@ impl Default for DataGridViewOptions {
     }
 }
 
+/// Context passed to the `render_cell` callback in [`DataGridView::render`].
 #[derive(Clone, Debug)]
 pub struct DataGridCellContext {
     pub cell: Cell,
@@ -124,6 +132,13 @@ pub struct DataGridCellContext {
     pub is_selected: bool,
 }
 
+/// A virtualized 2D grid view with keyboard navigation and optional selection.
+///
+/// This widget is designed for large tables (many rows/cols) where rendering all cells would be
+/// too expensive.
+///
+/// The grid itself is UI-agnostic: you drive it from your app loop by calling `handle_event` and
+/// `render`.
 pub struct DataGridView {
     pub state: ViewportState,
     options: DataGridViewOptions,

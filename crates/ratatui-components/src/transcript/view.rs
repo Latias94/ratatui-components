@@ -28,6 +28,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use unicode_width::UnicodeWidthStr;
 
+/// A logical role for transcript entries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Role {
     User,
@@ -47,6 +48,7 @@ impl Role {
     }
 }
 
+/// Content variants supported by [`TranscriptView`].
 #[derive(Clone, Debug)]
 pub enum EntryContent {
     Markdown(String),
@@ -55,12 +57,19 @@ pub enum EntryContent {
     Plain(String),
 }
 
+/// A transcript entry: `(role, content)`.
 #[derive(Clone, Debug)]
 pub struct TranscriptEntry {
     pub role: Role,
     pub content: EntryContent,
 }
 
+/// Options for [`TranscriptView`].
+///
+/// This view is designed for "chat transcript"-style UIs with mixed content. It uses internal
+/// caches to avoid re-wrapping and re-highlighting every frame.
+///
+/// Copy is app-controlled: a copy keybinding emits [`SelectionAction::CopyRequested`].
 #[derive(Clone, Debug)]
 pub struct TranscriptViewOptions {
     pub show_scrollbar: bool,
@@ -168,6 +177,14 @@ impl LinesLru {
     }
 }
 
+/// A virtualized transcript viewer with mixed rich content.
+///
+/// - Markdown entries are rendered via `MarkdownView` (or `MarkdownStreamView` when enabled).
+/// - Diff entries are rendered via `DiffView`.
+/// - ANSI/plain entries are rendered as `Text`.
+///
+/// The view keeps an LRU cache of wrapped lines per entry width. This makes it suitable for
+/// long-running agent CLIs where the transcript grows over time.
 #[derive(Default)]
 pub struct TranscriptView {
     entries: Vec<TranscriptEntry>,

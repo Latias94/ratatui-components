@@ -500,6 +500,12 @@ pub mod document {
     }
 }
 
+/// An interactive Markdown viewer with scrolling, optional code highlighting, and selection/copy.
+///
+/// This view maintains internal caches keyed by `width` to avoid re-wrapping every frame.
+///
+/// For custom layouts (multi-pane, custom scroll containers, virtualization), use the render core
+/// in [`document`].
 #[derive(Default)]
 pub struct MarkdownView {
     source: String,
@@ -559,6 +565,7 @@ impl MarkdownView {
         }
     }
 
+    /// Sets markdown source and reparses blocks.
     pub fn set_markdown(&mut self, input: &str) {
         self.source = input.to_string();
         self.blocks = parse_markdown_blocks(
@@ -590,12 +597,14 @@ impl MarkdownView {
         self.rendered.clear();
     }
 
+    /// Sets an optional highlighter used for code blocks.
     pub fn set_highlighter(&mut self, highlighter: Option<Arc<dyn CodeHighlighter + Send + Sync>>) {
         self.highlighter = highlighter;
         self.cached_width = None;
         self.highlight_cache.clear();
     }
 
+    /// Updates viewport size for `area` (and accounts for optional scrollbar/padding).
     pub fn set_viewport(&mut self, area: Rect) {
         let content_area = if self.options.show_scrollbar && area.width >= 2 {
             Rect::new(area.x, area.y, area.width - 1, area.height)
@@ -611,14 +620,17 @@ impl MarkdownView {
             .set_viewport(content_area.width, content_area.height);
     }
 
+    /// Scrolls vertically (y axis).
     pub fn scroll_y_by(&mut self, delta: i32) {
         self.state.scroll_y_by(delta);
     }
 
+    /// Scrolls horizontally (x axis).
     pub fn scroll_x_by(&mut self, delta: i32) {
         self.state.scroll_x_by(delta);
     }
 
+    /// Handles an event and returns a [`SelectionAction`] (redraw / copy-on-request).
     pub fn handle_event_action(&mut self, event: InputEvent) -> SelectionAction {
         match event {
             InputEvent::Paste(_) => SelectionAction::None,
@@ -653,6 +665,7 @@ impl MarkdownView {
         }
     }
 
+    /// Like [`Self::handle_event_action`], but first updates viewport state for `area`.
     pub fn handle_event_action_in_area(
         &mut self,
         area: Rect,
@@ -671,6 +684,7 @@ impl MarkdownView {
         }
     }
 
+    /// Handles mouse events for scrolling and drag-selection.
     pub fn handle_mouse_event(&mut self, area: Rect, event: MouseEvent) -> bool {
         if area.width == 0 || area.height == 0 {
             return false;

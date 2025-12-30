@@ -26,6 +26,11 @@ pub enum VirtualListAction {
     SelectionChanged,
 }
 
+/// Options for [`VirtualListView`].
+///
+/// This widget virtualizes items along the vertical axis using the `virtualizer` crate. You
+/// provide an item height estimator and (optionally) return dynamic measurements from the render
+/// callback.
 #[derive(Clone, Debug)]
 pub struct VirtualListViewOptions {
     pub show_scrollbar: bool,
@@ -75,6 +80,18 @@ pub struct VirtualListItemContext {
     pub x_scroll: u32,
 }
 
+/// A virtualized list view with keyboard navigation and optional selection.
+///
+/// - Items are virtualized using `virtualizer` and rendered via a user-provided callback.
+/// - The view owns [`ViewportState`] (`viewport`) which you can integrate with scrollbars or other
+///   layout logic.
+///
+/// ## Dynamic measurement
+///
+/// The `render` callback may return `Some(measured_size)` (in scroll-axis units, i.e. rows) to
+/// update the virtualizer's measurement cache.
+///
+/// For fixed-height lists, use [`Self::set_fixed_item_size`].
 pub struct VirtualListView {
     pub viewport: ViewportState,
     options: VirtualListViewOptions,
@@ -118,6 +135,7 @@ impl VirtualListView {
         Self::default()
     }
 
+    /// Creates a view with `options`.
     pub fn with_options(options: VirtualListViewOptions) -> Self {
         let mut v = Self::default();
         v.set_options(options);
@@ -140,10 +158,12 @@ impl VirtualListView {
         self.virtualizer.set_gap(self.options.gap);
     }
 
+    /// Sets the current cursor index (used for navigation and activation).
     pub fn cursor(&self) -> Option<usize> {
         self.cursor
     }
 
+    /// Returns the selected set (for multi-select mode).
     pub fn selected(&self) -> &BTreeSet<usize> {
         &self.selection
     }
@@ -162,6 +182,10 @@ impl VirtualListView {
         self.set_estimator(move |_, _| size);
     }
 
+    /// Sets the item size estimator.
+    ///
+    /// The estimator receives `(index, viewport_width)` and returns an estimated height in rows.
+    /// This is useful for text-wrapped items whose height depends on width.
     pub fn set_estimator(&mut self, f: impl Fn(usize, u16) -> u32 + Send + Sync + 'static) {
         self.estimator = Arc::new(f);
         self.virtualizer = Self::make_virtualizer(
@@ -178,6 +202,9 @@ impl VirtualListView {
         self.virtualizer.set_get_item_key(f);
     }
 
+    /// Overrides the virtualizer range extractor (advanced use).
+    ///
+    /// This can be used to implement pinned/sticky rows or custom index inclusion policies.
     pub fn set_range_extractor(
         &mut self,
         f: Option<impl Fn(virtualizer::Range, &mut dyn FnMut(usize)) + Send + Sync + 'static>,
@@ -223,6 +250,14 @@ impl VirtualListView {
         }
     }
 
+    /// Renders the visible items into `buf`.
+    ///
+    /// The `render_item` callback is invoked for each visible item with:
+    /// - `Rect`: the visible portion of the item inside the viewport
+    /// - [`VirtualListItemContext`]: item index, key, offsets and selection flags
+    ///
+    /// If the callback returns `Some(measured_height)`, that value is used to update the
+    /// virtualizer measurement cache for the item.
     pub fn render<F>(
         &mut self,
         area: Rect,

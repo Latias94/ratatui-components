@@ -25,6 +25,9 @@ fn expand_tabs(s: &str) -> std::borrow::Cow<'_, str> {
     }
 }
 
+/// Converts an ANSI-colored string into a [`Text`].
+///
+/// Tabs are expanded as 4 spaces before parsing to keep hit-testing and selection consistent.
 pub fn ansi_text(input: &str) -> Text<'static> {
     let input = expand_tabs(input);
     input
@@ -33,6 +36,7 @@ pub fn ansi_text(input: &str) -> Text<'static> {
         .unwrap_or_else(|_| Text::from(input.to_string()))
 }
 
+/// Options for [`AnsiTextView`].
 #[derive(Clone, Debug)]
 pub struct AnsiTextViewOptions {
     pub show_scrollbar: bool,
@@ -52,6 +56,12 @@ impl Default for AnsiTextViewOptions {
     }
 }
 
+/// A scrollable ANSI text viewer with optional mouse selection + copy-on-request.
+///
+/// Selection is performed in terminal cell units (line, column). When the copy binding is pressed,
+/// the view returns a [`SelectionAction::CopyRequested`] containing the extracted plain text.
+///
+/// This widget intentionally does not interact with the system clipboard.
 #[derive(Clone, Default)]
 pub struct AnsiTextView {
     lines: Vec<Line<'static>>,
@@ -74,6 +84,7 @@ impl AnsiTextView {
         }
     }
 
+    /// Sets the ANSI input and updates internal content metrics.
     pub fn set_ansi(&mut self, input: &str) {
         let text = ansi_text(input);
         self.lines = text.lines;
@@ -82,10 +93,12 @@ impl AnsiTextView {
             .set_content(self.max_content_width as u32, self.lines.len() as u32);
     }
 
+    /// Handles an event and returns `true` if a redraw is needed.
     pub fn handle_event(&mut self, event: InputEvent) -> bool {
         !matches!(self.handle_event_action(event), SelectionAction::None)
     }
 
+    /// Handles an event and returns a [`SelectionAction`] (redraw / copy-on-request).
     pub fn handle_event_action(&mut self, event: InputEvent) -> SelectionAction {
         match event {
             InputEvent::Paste(_) => SelectionAction::None,
@@ -121,6 +134,7 @@ impl AnsiTextView {
         }
     }
 
+    /// Like [`Self::handle_event`], but first updates viewport state for `area`.
     pub fn handle_event_in_area(&mut self, area: Rect, event: InputEvent) -> bool {
         !matches!(
             self.handle_event_action_in_area(area, event),
@@ -128,6 +142,7 @@ impl AnsiTextView {
         )
     }
 
+    /// Like [`Self::handle_event_action`], but first updates viewport state for `area`.
     pub fn handle_event_action_in_area(
         &mut self,
         area: Rect,
@@ -146,6 +161,7 @@ impl AnsiTextView {
         }
     }
 
+    /// Handles mouse events for scrolling and drag-selection.
     pub fn handle_mouse_event(&mut self, area: Rect, event: MouseEvent) -> bool {
         if area.width == 0 || area.height == 0 {
             return false;

@@ -28,6 +28,13 @@ use crate::text::CodeHighlighter;
 use crate::theme::Theme;
 use crate::viewport::ViewportState;
 
+/// Options for [`DiffView`].
+///
+/// This view is optimized for unified diffs (like `git diff` output). It supports:
+/// - scrolling
+/// - optional line numbers
+/// - optional syntax highlighting for code-like lines
+/// - mouse drag selection + copy-on-request
 #[derive(Clone, Debug)]
 pub struct DiffViewOptions {
     pub show_line_numbers: bool,
@@ -53,6 +60,11 @@ impl Default for DiffViewOptions {
     }
 }
 
+/// A scrollable unified-diff viewer with optional syntax highlighting and selection + copy.
+///
+/// - The diff input is parsed via [`set_diff`](Self::set_diff).
+/// - The view is event-loop agnostic: call `handle_event_action*` and `render_ref` from your app.
+/// - Copy is app-controlled: a copy keybinding emits [`SelectionAction::CopyRequested`].
 #[derive(Default)]
 pub struct DiffView {
     parsed: ParsedDiff,
@@ -104,16 +116,19 @@ impl DiffView {
         }
     }
 
+    /// Sets a highlighter used for visible lines.
     pub fn set_highlighter(&mut self, highlighter: Option<Arc<dyn CodeHighlighter + Send + Sync>>) {
         self.highlighter = highlighter;
         self.invalidate_highlighting();
     }
 
+    /// Overrides language detection for highlighting.
     pub fn set_language_override(&mut self, language: Option<impl Into<String>>) {
         self.language_override = language.map(Into::into);
         self.invalidate_highlighting();
     }
 
+    /// Parses a unified diff string and updates internal layout metrics.
     pub fn set_diff(&mut self, diff: &str) {
         self.parsed = parser::parse_unified_diff(diff);
         self.inline_ranges = if self.options.highlight_inline_changes {
@@ -128,6 +143,7 @@ impl DiffView {
         );
     }
 
+    /// Updates viewport size for `area` (and accounts for optional gutter/scrollbar).
     pub fn set_viewport(&mut self, area: Rect) {
         let (old_w, new_w, gutter_w) = if self.options.show_line_numbers {
             let old_w = digits(self.parsed.max_old_lineno).max(1);
@@ -149,18 +165,22 @@ impl DiffView {
         self.state.set_viewport(viewport_w, content_area.height);
     }
 
+    /// Scrolls vertically (y axis).
     pub fn scroll_y_by(&mut self, delta: i32) {
         self.state.scroll_y_by(delta);
     }
 
+    /// Scrolls horizontally (x axis).
     pub fn scroll_x_by(&mut self, delta: i32) {
         self.state.scroll_x_by(delta);
     }
 
+    /// Handles an event and returns `true` if a redraw is needed.
     pub fn handle_event(&mut self, event: crate::input::InputEvent) -> bool {
         !matches!(self.handle_event_action(event), SelectionAction::None)
     }
 
+    /// Handles an event and returns a [`SelectionAction`] (redraw / copy-on-request).
     pub fn handle_event_action(&mut self, event: crate::input::InputEvent) -> SelectionAction {
         match event {
             crate::input::InputEvent::Paste(_) => SelectionAction::None,
@@ -186,6 +206,7 @@ impl DiffView {
         }
     }
 
+    /// Like [`Self::handle_event`], but first updates viewport state for `area`.
     pub fn handle_event_in_area(&mut self, area: Rect, event: crate::input::InputEvent) -> bool {
         !matches!(
             self.handle_event_action_in_area(area, event),
@@ -193,6 +214,7 @@ impl DiffView {
         )
     }
 
+    /// Like [`Self::handle_event_action`], but first updates viewport state for `area`.
     pub fn handle_event_action_in_area(
         &mut self,
         area: Rect,
@@ -211,6 +233,7 @@ impl DiffView {
         }
     }
 
+    /// Handles mouse events for scrolling and drag-selection.
     pub fn handle_mouse_event(&mut self, area: Rect, event: MouseEvent) -> bool {
         if area.width == 0 || area.height == 0 {
             return false;
