@@ -11,6 +11,8 @@ pub mod selection;
 pub mod viewport;
 pub mod wrapping;
 
+pub mod code_render;
+
 pub mod code_view;
 pub mod datagrid;
 pub mod help;
