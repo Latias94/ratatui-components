@@ -9,6 +9,8 @@ ratatui-components-core = { path = "../ratatui-components-core" }
 
 syntect = { workspace = true, optional = true }
 tree-sitter = { workspace = true, optional = true }
+termprofile = { workspace = true, optional = true, features = ["convert", "ratatui"] }
+ratatui-core = { version = "0.1", default-features = false, optional = true }
 
 # Common tree-sitter language crates (opt-in).
 tree-sitter-bash = { version = "*", optional = true }
@@ -31,6 +33,7 @@ default = []
 
 syntect = ["dep:syntect"]
 treesitter = ["dep:tree-sitter"]
+termprofile = ["dep:termprofile", "dep:ratatui-core"]
 
 treesitter-lang-bash = ["treesitter", "dep:tree-sitter-bash"]
 treesitter-lang-c = ["treesitter", "dep:tree-sitter-c"]

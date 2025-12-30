@@ -22,6 +22,7 @@ mdstream = ["markdown", "ratatui-components-markdown/mdstream"]
 transcript = ["ansi", "diff", "markdown"]
 syntect = ["dep:ratatui-components-syntax", "ratatui-components-syntax/syntect"]
 treesitter = ["dep:ratatui-components-syntax", "ratatui-components-syntax/treesitter"]
+termprofile = ["dep:ratatui-components-syntax", "ratatui-components-syntax/termprofile"]
 
 treesitter-lang-bash = ["treesitter", "ratatui-components-syntax/treesitter-lang-bash"]
 treesitter-lang-c = ["treesitter", "ratatui-components-syntax/treesitter-lang-c"]
