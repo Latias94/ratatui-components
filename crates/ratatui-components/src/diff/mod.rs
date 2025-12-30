@@ -311,6 +311,8 @@ impl DiffView {
 
         self.set_viewport(area);
 
+        let code_bg = self.highlighter.as_ref().and_then(|h| h.background_color());
+
         let (content_area, scrollbar_x) = if self.options.show_scrollbar && area.width >= 2 {
             (
                 Rect::new(area.x, area.y, area.width - 1, area.height),
@@ -344,14 +346,24 @@ impl DiffView {
             let y = content_area.y + row;
             let idx = (self.state.y as usize).saturating_add(row as usize);
             let Some(line) = self.parsed.lines.get(idx) else {
+                let style = if let Some(bg) = code_bg {
+                    theme.text_primary.bg(bg)
+                } else {
+                    theme.text_primary
+                };
                 buf.set_style(
                     Rect::new(content_area.x, y, content_area.width, 1),
-                    theme.text_primary,
+                    style,
                 );
                 continue;
             };
 
             let line_style = style_for_kind(theme, line.kind);
+            let line_style = if let Some(bg) = code_bg {
+                line_style.bg(bg)
+            } else {
+                line_style
+            };
             buf.set_style(
                 Rect::new(content_area.x, y, content_area.width, 1),
                 line_style,
@@ -378,6 +390,11 @@ impl DiffView {
             };
 
             let gutter_style = gutter_style_for_kind(theme, line.kind);
+            let gutter_style = if let Some(bg) = code_bg {
+                gutter_style.bg(bg)
+            } else {
+                gutter_style
+            };
             buf.set_stringn(
                 content_area.x,
                 y,
@@ -791,6 +808,7 @@ mod tests {
     use crate::text::NoHighlight;
     use ratatui::buffer::Buffer;
     use ratatui::layout::Rect;
+    use ratatui::style::Color;
     use std::sync::atomic::AtomicUsize;
     use std::sync::atomic::Ordering;
 
@@ -855,6 +873,48 @@ diff --git a/main.rs b/main.rs
         let theme = Theme::default();
         let mut buf = Buffer::empty(Rect::new(0, 0, 50, 3));
         view.render_ref(Rect::new(0, 0, 50, 3), &mut buf, &theme);
+    }
+
+    #[test]
+    fn applies_highlighter_background_color() {
+        struct BgHighlighter;
+
+        impl CodeHighlighter for BgHighlighter {
+            fn highlight_lines(
+                &self,
+                _language: Option<&str>,
+                lines: &[&str],
+            ) -> Vec<Vec<Span<'static>>> {
+                lines
+                    .iter()
+                    .map(|l| vec![Span::raw((*l).to_string())])
+                    .collect()
+            }
+
+            fn background_color(&self) -> Option<Color> {
+                Some(Color::Blue)
+            }
+        }
+
+        let diff = "\
+diff --git a/a.txt b/a.txt
+--- a/a.txt
++++ b/a.txt
+@@ -1,1 +1,1 @@
+ a
+";
+        let mut view = DiffView::with_options(DiffViewOptions {
+            show_scrollbar: false,
+            ..Default::default()
+        });
+        view.set_highlighter(Some(Arc::new(BgHighlighter)));
+        view.set_diff(diff);
+
+        let theme = Theme::default();
+        let mut buf = Buffer::empty(Rect::new(0, 0, 50, 2));
+        view.render_ref(Rect::new(0, 0, 50, 2), &mut buf, &theme);
+
+        assert_eq!(buf.cell((49, 0)).expect("cell exists").style().bg, Some(Color::Blue));
     }
 
     #[test]

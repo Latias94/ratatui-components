@@ -333,6 +333,13 @@ impl CodeView {
         };
         let content_w = content_area.width.saturating_sub(gutter_w);
 
+        let (base_style, gutter_style) = if let Some(bg) = self.highlighter.as_ref().and_then(|h| h.background_color())
+        {
+            (theme.text_primary.bg(bg), theme.text_muted.bg(bg))
+        } else {
+            (theme.text_primary, theme.text_muted)
+        };
+
         let highlighted = if self.highlighter.is_some() && content_w > 0 {
             let start = self.state.y as usize;
             let end = (start + content_area.height as usize).min(self.lines.len());
@@ -347,7 +354,7 @@ impl CodeView {
 
             buf.set_style(
                 Rect::new(content_area.x, y, content_area.width, 1),
-                theme.text_primary,
+                base_style,
             );
 
             if self.options.show_line_numbers && gutter_w > 0 {
@@ -365,7 +372,7 @@ impl CodeView {
                     y,
                     lineno,
                     content_area.width as usize,
-                    theme.text_muted,
+                    gutter_style,
                 );
             }
 
@@ -417,7 +424,7 @@ impl CodeView {
                 content_w,
                 buf,
                 &spans,
-                theme.text_primary,
+                base_style,
             );
         }
 
@@ -531,6 +538,9 @@ fn normalize_sel(a: (usize, u32), b: (usize, u32)) -> ((usize, u32), (usize, u32
 mod tests {
     use super::*;
     use ratatui::buffer::Buffer;
+    use ratatui::style::Color;
+    use ratatui::style::Style;
+    use std::sync::Arc;
 
     #[test]
     fn code_view_renders_without_panic() {
@@ -539,5 +549,44 @@ mod tests {
         let theme = Theme::default();
         let mut buf = Buffer::empty(Rect::new(0, 0, 20, 3));
         v.render_ref(Rect::new(0, 0, 20, 3), &mut buf, &theme);
+    }
+
+    #[test]
+    fn code_view_applies_highlighter_background_to_trailing_cells() {
+        struct BgHighlighter;
+
+        impl CodeHighlighter for BgHighlighter {
+            fn highlight_lines(
+                &self,
+                _language: Option<&str>,
+                lines: &[&str],
+            ) -> Vec<Vec<Span<'static>>> {
+                lines
+                    .iter()
+                    .map(|l| vec![Span::styled((*l).to_string(), Style::default())])
+                    .collect()
+            }
+
+            fn background_color(&self) -> Option<Color> {
+                Some(Color::Blue)
+            }
+        }
+
+        let mut v = CodeView::with_options(CodeViewOptions {
+            show_line_numbers: false,
+            show_scrollbar: false,
+            ..Default::default()
+        });
+        v.set_code("hi");
+        v.set_highlighter(Some(Arc::new(BgHighlighter)));
+
+        let theme = Theme::default();
+        let mut buf = Buffer::empty(Rect::new(0, 0, 10, 1));
+        v.render_ref(Rect::new(0, 0, 10, 1), &mut buf, &theme);
+
+        assert_eq!(
+            buf.cell((9, 0)).expect("cell exists").style().bg,
+            Some(Color::Blue)
+        );
     }
 }

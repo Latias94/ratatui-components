@@ -1,8 +1,13 @@
+use ratatui::style::Color;
 use ratatui::style::Style;
 use ratatui::text::Span;
 
 pub trait CodeHighlighter {
     fn highlight_lines(&self, language: Option<&str>, lines: &[&str]) -> Vec<Vec<Span<'static>>>;
+
+    fn background_color(&self) -> Option<Color> {
+        None
+    }
 
     fn highlight_line(&self, language: Option<&str>, line: &str) -> Vec<Span<'static>> {
         self.highlight_lines(language, &[line])

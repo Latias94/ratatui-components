@@ -58,6 +58,10 @@ impl Default for SyntectHighlighter {
 }
 
 impl CodeHighlighter for SyntectHighlighter {
+    fn background_color(&self) -> Option<Color> {
+        self.theme_background_color()
+    }
+
     fn highlight_lines(&self, language: Option<&str>, lines: &[&str]) -> Vec<Vec<Span<'static>>> {
         let syntax = self.syntax_for(language);
         let mut highlighter = HighlightLines::new(syntax, &self.theme);
