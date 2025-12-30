@@ -164,6 +164,9 @@ impl AnsiTextView {
         if !self.options.enable_selection {
             return false;
         }
+        if self.lines.is_empty() {
+            return false;
+        }
 
         let content_area = if self.options.show_scrollbar && area.width >= 2 {
             Rect::new(area.x, area.y, area.width - 1, area.height)
@@ -171,16 +174,52 @@ impl AnsiTextView {
             area
         };
 
-        if event.x < content_area.x
-            || event.x >= content_area.x + content_area.width
-            || event.y < content_area.y
-            || event.y >= content_area.y + content_area.height
-        {
+        let content_start_x = content_area.x;
+        let content_end_x = content_area
+            .x
+            .saturating_add(content_area.width)
+            .saturating_sub(1);
+        let content_start_y = content_area.y;
+        let content_end_y = content_area
+            .y
+            .saturating_add(content_area.height)
+            .saturating_sub(1);
+
+        if content_start_x > content_end_x || content_start_y > content_end_y {
             return false;
         }
 
-        let rel_x = (event.x - content_area.x) as u32;
-        let rel_y = (event.y - content_area.y) as u32;
+        let inside = event.x >= content_start_x
+            && event.x <= content_end_x
+            && event.y >= content_start_y
+            && event.y <= content_end_y;
+
+        let (x, y) = match event.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                if !inside {
+                    return false;
+                }
+                (event.x, event.y)
+            }
+            MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left) => {
+                if self.selection_anchor.is_none() {
+                    return false;
+                }
+                (
+                    event.x.clamp(content_start_x, content_end_x),
+                    event.y.clamp(content_start_y, content_end_y),
+                )
+            }
+            _ => {
+                if !inside {
+                    return false;
+                }
+                (event.x, event.y)
+            }
+        };
+
+        let rel_x = (x - content_area.x) as u32;
+        let rel_y = (y - content_area.y) as u32;
         let line = self
             .state
             .y
@@ -220,7 +259,8 @@ impl AnsiTextView {
 
     pub fn selected_text(&self) -> Option<String> {
         let ((l0, c0), (l1, c1)) = self.selection?;
-        let ((start_line, start_col), (end_line, end_col)) = normalize_sel((l0, c0), (l1, c1));
+        let ((start_line, start_col), (end_line, end_col)) =
+            normalize_sel_inclusive((l0, c0), (l1, c1));
 
         let mut out = String::new();
         for line_idx in start_line..=end_line {
@@ -291,7 +331,7 @@ impl AnsiTextView {
                     && let Some(((l0, c0), (l1, c1))) = self.selection
                 {
                     let ((start_line, start_col), (end_line, end_col)) =
-                        normalize_sel((l0, c0), (l1, c1));
+                        normalize_sel_inclusive((l0, c0), (l1, c1));
                     if idx >= start_line && idx <= end_line {
                         let (from, to) = if start_line == end_line {
                             (start_col, end_col)
@@ -362,6 +402,11 @@ fn normalize_sel(a: (usize, u32), b: (usize, u32)) -> ((usize, u32), (usize, u32
     } else {
         (b, a)
     }
+}
+
+fn normalize_sel_inclusive(a: (usize, u32), b: (usize, u32)) -> ((usize, u32), (usize, u32)) {
+    let (start, end) = normalize_sel(a, b);
+    (start, (end.0, end.1.saturating_add(1)))
 }
 
 #[cfg(test)]

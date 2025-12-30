@@ -137,12 +137,10 @@ impl CodeView {
     }
 
     pub fn handle_mouse_event(&mut self, area: Rect, event: MouseEvent) -> bool {
-        if !self.options.enable_selection {
-            return false;
-        }
         if area.width == 0 || area.height == 0 {
             return false;
         }
+        self.set_viewport(area);
 
         let content_area = if self.options.show_scrollbar && area.width >= 2 {
             Rect::new(area.x, area.y, area.width - 1, area.height)
@@ -168,16 +166,56 @@ impl CodeView {
             _ => {}
         }
 
-        if event.x < content_area.x + gutter_w
-            || event.x >= content_area.x + content_area.width
-            || event.y < content_area.y
-            || event.y >= content_area.y + content_area.height
-        {
+        if !self.options.enable_selection || self.lines.is_empty() {
             return false;
         }
 
-        let rel_x = (event.x - (content_area.x + gutter_w)) as u32;
-        let rel_y = (event.y - content_area.y) as u32;
+        let content_start_x = content_area.x.saturating_add(gutter_w);
+        let content_end_x = content_area
+            .x
+            .saturating_add(content_area.width)
+            .saturating_sub(1);
+        let content_start_y = content_area.y;
+        let content_end_y = content_area
+            .y
+            .saturating_add(content_area.height)
+            .saturating_sub(1);
+
+        if content_start_x > content_end_x || content_start_y > content_end_y {
+            return false;
+        }
+
+        let inside = event.x >= content_start_x
+            && event.x <= content_end_x
+            && event.y >= content_start_y
+            && event.y <= content_end_y;
+
+        let (x, y) = match event.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                if !inside {
+                    return false;
+                }
+                (event.x, event.y)
+            }
+            MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left) => {
+                if self.selection_anchor.is_none() {
+                    return false;
+                }
+                (
+                    event.x.clamp(content_start_x, content_end_x),
+                    event.y.clamp(content_start_y, content_end_y),
+                )
+            }
+            _ => {
+                if !inside {
+                    return false;
+                }
+                (event.x, event.y)
+            }
+        };
+
+        let rel_x = (x - content_start_x) as u32;
+        let rel_y = (y - content_area.y) as u32;
         let line = self
             .state
             .y
@@ -220,7 +258,8 @@ impl CodeView {
 
     pub fn selected_text(&self) -> Option<String> {
         let ((l0, c0), (l1, c1)) = self.selection?;
-        let ((start_line, start_col), (end_line, end_col)) = normalize_sel((l0, c0), (l1, c1));
+        let ((start_line, start_col), (end_line, end_col)) =
+            normalize_sel_inclusive((l0, c0), (l1, c1));
 
         let mut out = String::new();
         for line_idx in start_line..=end_line {
@@ -398,7 +437,7 @@ impl CodeView {
                 && let Some(((l0, c0), (l1, c1))) = self.selection
             {
                 let ((start_line, start_col), (end_line, end_col)) =
-                    normalize_sel((l0, c0), (l1, c1));
+                    normalize_sel_inclusive((l0, c0), (l1, c1));
                 if idx >= start_line && idx <= end_line {
                     let (from, to) = if start_line == end_line {
                         (start_col, end_col)
@@ -544,6 +583,11 @@ fn normalize_sel(a: (usize, u32), b: (usize, u32)) -> ((usize, u32), (usize, u32
     }
 }
 
+fn normalize_sel_inclusive(a: (usize, u32), b: (usize, u32)) -> ((usize, u32), (usize, u32)) {
+    let (start, end) = normalize_sel(a, b);
+    (start, (end.0, end.1.saturating_add(1)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -598,5 +642,82 @@ mod tests {
             buf.cell((9, 0)).expect("cell exists").style().bg,
             Some(Color::Blue)
         );
+    }
+
+    #[test]
+    fn mouse_click_selects_single_cell() {
+        let mut v = CodeView::with_options(CodeViewOptions {
+            show_line_numbers: false,
+            show_scrollbar: false,
+            ..Default::default()
+        });
+        v.set_code("abcd\n");
+
+        let area = Rect::new(0, 0, 4, 1);
+        let modifiers = crate::input::KeyModifiers::none();
+
+        assert!(v.handle_mouse_event(
+            area,
+            MouseEvent {
+                x: 0,
+                y: 0,
+                kind: MouseEventKind::Down(MouseButton::Left),
+                modifiers,
+            }
+        ));
+        assert!(v.handle_mouse_event(
+            area,
+            MouseEvent {
+                x: 0,
+                y: 0,
+                kind: MouseEventKind::Up(MouseButton::Left),
+                modifiers,
+            }
+        ));
+
+        assert_eq!(v.selected_text().as_deref(), Some("a"));
+    }
+
+    #[test]
+    fn mouse_drag_outside_area_clamps_selection() {
+        let mut v = CodeView::with_options(CodeViewOptions {
+            show_line_numbers: false,
+            show_scrollbar: false,
+            ..Default::default()
+        });
+        v.set_code("abcd\n");
+
+        let area = Rect::new(0, 0, 4, 1);
+        let modifiers = crate::input::KeyModifiers::none();
+
+        assert!(v.handle_mouse_event(
+            area,
+            MouseEvent {
+                x: 1,
+                y: 0,
+                kind: MouseEventKind::Down(MouseButton::Left),
+                modifiers,
+            }
+        ));
+        assert!(v.handle_mouse_event(
+            area,
+            MouseEvent {
+                x: 999,
+                y: 999,
+                kind: MouseEventKind::Drag(MouseButton::Left),
+                modifiers,
+            }
+        ));
+        assert!(v.handle_mouse_event(
+            area,
+            MouseEvent {
+                x: 999,
+                y: 999,
+                kind: MouseEventKind::Up(MouseButton::Left),
+                modifiers,
+            }
+        ));
+
+        assert_eq!(v.selected_text().as_deref(), Some("bcd"));
     }
 }

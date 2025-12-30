@@ -212,10 +212,11 @@ impl DiffView {
     }
 
     pub fn handle_mouse_event(&mut self, area: Rect, event: MouseEvent) -> bool {
-        if !self.options.enable_selection {
+        if area.width == 0 || area.height == 0 {
             return false;
         }
-        if area.width == 0 || area.height == 0 {
+        self.set_viewport(area);
+        if self.parsed.lines.is_empty() {
             return false;
         }
 
@@ -229,6 +230,10 @@ impl DiffView {
                 return true;
             }
             _ => {}
+        }
+
+        if !self.options.enable_selection {
+            return false;
         }
 
         let content_area = if self.options.show_scrollbar && area.width >= 2 {
@@ -246,16 +251,52 @@ impl DiffView {
             2
         };
 
-        if event.x < content_area.x + gutter_w
-            || event.x >= content_area.x + content_area.width
-            || event.y < content_area.y
-            || event.y >= content_area.y + content_area.height
-        {
+        let content_start_x = content_area.x.saturating_add(gutter_w);
+        let content_end_x = content_area
+            .x
+            .saturating_add(content_area.width)
+            .saturating_sub(1);
+        let content_start_y = content_area.y;
+        let content_end_y = content_area
+            .y
+            .saturating_add(content_area.height)
+            .saturating_sub(1);
+
+        if content_start_x > content_end_x || content_start_y > content_end_y {
             return false;
         }
 
-        let rel_x = (event.x - (content_area.x + gutter_w)) as u32;
-        let rel_y = (event.y - content_area.y) as u32;
+        let inside = event.x >= content_start_x
+            && event.x <= content_end_x
+            && event.y >= content_start_y
+            && event.y <= content_end_y;
+
+        let (x, y) = match event.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                if !inside {
+                    return false;
+                }
+                (event.x, event.y)
+            }
+            MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left) => {
+                if self.selection_anchor.is_none() {
+                    return false;
+                }
+                (
+                    event.x.clamp(content_start_x, content_end_x),
+                    event.y.clamp(content_start_y, content_end_y),
+                )
+            }
+            _ => {
+                if !inside {
+                    return false;
+                }
+                (event.x, event.y)
+            }
+        };
+
+        let rel_x = (x - content_start_x) as u32;
+        let rel_y = (y - content_area.y) as u32;
         let line = self
             .state
             .y
@@ -298,7 +339,8 @@ impl DiffView {
 
     pub fn selected_text(&self) -> Option<String> {
         let ((l0, c0), (l1, c1)) = self.selection?;
-        let ((start_line, start_col), (end_line, end_col)) = normalize_sel((l0, c0), (l1, c1));
+        let ((start_line, start_col), (end_line, end_col)) =
+            normalize_sel_inclusive((l0, c0), (l1, c1));
 
         let mut out = String::new();
         for line_idx in start_line..=end_line {
@@ -447,7 +489,7 @@ impl DiffView {
                         && let Some(((l0, c0), (l1, c1))) = self.selection
                     {
                         let ((start_line, start_col), (end_line, end_col)) =
-                            normalize_sel((l0, c0), (l1, c1));
+                            normalize_sel_inclusive((l0, c0), (l1, c1));
                         if idx >= start_line && idx <= end_line {
                             let (from, to) = if start_line == end_line {
                                 (start_col, end_col)
@@ -852,6 +894,11 @@ fn normalize_sel(a: (usize, u32), b: (usize, u32)) -> ((usize, u32), (usize, u32
     }
 }
 
+fn normalize_sel_inclusive(a: (usize, u32), b: (usize, u32)) -> ((usize, u32), (usize, u32)) {
+    let (start, end) = normalize_sel(a, b);
+    (start, (end.0, end.1.saturating_add(1)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1051,5 +1098,46 @@ diff --git a/main.rs b/main.rs
         let _ = view.lines_for_transcript(&theme);
 
         assert_eq!(highlighter.calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn mouse_click_selects_single_cell() {
+        let diff = "\
+diff --git a/a.txt b/a.txt
+@@ -1,1 +1,1 @@
+-a
++b
+";
+
+        let mut view = DiffView::with_options(DiffViewOptions {
+            show_line_numbers: false,
+            show_scrollbar: false,
+            ..Default::default()
+        });
+        view.set_diff(diff);
+
+        let area = Rect::new(0, 0, 20, 5);
+        let modifiers = crate::input::KeyModifiers::none();
+
+        assert!(view.handle_mouse_event(
+            area,
+            MouseEvent {
+                x: 2,
+                y: 3,
+                kind: MouseEventKind::Down(MouseButton::Left),
+                modifiers,
+            }
+        ));
+        assert!(view.handle_mouse_event(
+            area,
+            MouseEvent {
+                x: 2,
+                y: 3,
+                kind: MouseEventKind::Up(MouseButton::Left),
+                modifiers,
+            }
+        ));
+
+        assert_eq!(view.selected_text().as_deref(), Some("b"));
     }
 }

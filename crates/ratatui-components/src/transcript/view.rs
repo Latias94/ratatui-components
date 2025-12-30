@@ -539,7 +539,7 @@ impl TranscriptView {
                         && let Some(((l0, c0), (l1, c1))) = self.selection
                     {
                         let ((start_line, start_col), (end_line, end_col)) =
-                            normalize_sel((l0, c0), (l1, c1));
+                            normalize_sel_inclusive((l0, c0), (l1, c1));
                         if global >= start_line && global <= end_line {
                             let (from, to) = if start_line == end_line {
                                 (start_col, end_col)
@@ -807,14 +807,6 @@ impl TranscriptView {
             area
         };
 
-        if event.x < content_area.x
-            || event.x >= content_area.x + content_area.width
-            || event.y < content_area.y
-            || event.y >= content_area.y + content_area.height
-        {
-            return false;
-        }
-
         self.ensure_layout(content_area.width, &Theme::default());
         let prefix_w = prefix_width(self.gutter_width).min(content_area.width);
         let visible_content_w = content_area.width.saturating_sub(prefix_w);
@@ -824,10 +816,24 @@ impl TranscriptView {
 
         match event.kind {
             MouseEventKind::ScrollUp => {
+                if event.x < content_area.x
+                    || event.x >= content_area.x + content_area.width
+                    || event.y < content_area.y
+                    || event.y >= content_area.y + content_area.height
+                {
+                    return false;
+                }
                 self.scroll_y_by(-3);
                 return true;
             }
             MouseEventKind::ScrollDown => {
+                if event.x < content_area.x
+                    || event.x >= content_area.x + content_area.width
+                    || event.y < content_area.y
+                    || event.y >= content_area.y + content_area.height
+                {
+                    return false;
+                }
                 self.scroll_y_by(3);
                 return true;
             }
@@ -840,12 +846,56 @@ impl TranscriptView {
         if visible_content_w == 0 {
             return false;
         }
-        if event.x < content_area.x + prefix_w {
+        if self.total_lines() == 0 {
             return false;
         }
 
-        let rel_x = (event.x - (content_area.x + prefix_w)) as u32;
-        let rel_y = (event.y - content_area.y) as u32;
+        let content_start_x = content_area.x.saturating_add(prefix_w);
+        let content_end_x = content_area
+            .x
+            .saturating_add(content_area.width)
+            .saturating_sub(1);
+        let content_start_y = content_area.y;
+        let content_end_y = content_area
+            .y
+            .saturating_add(content_area.height)
+            .saturating_sub(1);
+
+        if content_start_x > content_end_x || content_start_y > content_end_y {
+            return false;
+        }
+
+        let inside = event.x >= content_start_x
+            && event.x <= content_end_x
+            && event.y >= content_start_y
+            && event.y <= content_end_y;
+
+        let (x, y) = match event.kind {
+            MouseEventKind::Down(MouseButton::Left) => {
+                if !inside {
+                    return false;
+                }
+                (event.x, event.y)
+            }
+            MouseEventKind::Drag(MouseButton::Left) | MouseEventKind::Up(MouseButton::Left) => {
+                if self.selection_anchor.is_none() {
+                    return false;
+                }
+                (
+                    event.x.clamp(content_start_x, content_end_x),
+                    event.y.clamp(content_start_y, content_end_y),
+                )
+            }
+            _ => {
+                if !inside {
+                    return false;
+                }
+                (event.x, event.y)
+            }
+        };
+
+        let rel_x = (x - content_start_x) as u32;
+        let rel_y = (y - content_area.y) as u32;
         let global_line = self
             .state
             .y
@@ -885,7 +935,8 @@ impl TranscriptView {
 
     pub fn selected_text(&mut self) -> Option<String> {
         let ((l0, c0), (l1, c1)) = self.selection?;
-        let ((start_line, start_col), (end_line, end_col)) = normalize_sel((l0, c0), (l1, c1));
+        let ((start_line, start_col), (end_line, end_col)) =
+            normalize_sel_inclusive((l0, c0), (l1, c1));
         let width = self.cached_width?;
 
         let mut out = String::new();
@@ -1153,6 +1204,11 @@ fn normalize_sel(a: (u32, u32), b: (u32, u32)) -> ((u32, u32), (u32, u32)) {
     } else {
         (b, a)
     }
+}
+
+fn normalize_sel_inclusive(a: (u32, u32), b: (u32, u32)) -> ((u32, u32), (u32, u32)) {
+    let (start, end) = normalize_sel(a, b);
+    (start, (end.0, end.1.saturating_add(1)))
 }
 
 #[cfg(test)]
