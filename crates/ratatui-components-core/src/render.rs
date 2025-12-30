@@ -251,6 +251,17 @@ pub fn slice_by_cols(input: &str, start_col: u32, max_cols: u16) -> String {
     out
 }
 
+/// Converts a *cell-column* slice (`start_col..end_col`) into a UTF-8 byte range for `input`.
+///
+/// This is useful for implementing "mouse drag to select and copy" for monospace text while still
+/// handling:
+/// - tabs (expanded as 4 spaces)
+/// - wide characters (e.g. CJK, emoji) via `unicode-width`
+///
+/// Notes:
+/// - Column coordinates are in terminal cell units, not bytes.
+/// - `end_col` is exclusive (like Rust ranges).
+/// - If the requested range is empty or cannot be represented cleanly, this returns `None`.
 pub fn byte_range_for_cols(input: &str, start_col: u32, end_col: u32) -> Option<(usize, usize)> {
     let start_col = start_col as usize;
     let end_col = end_col as usize;
@@ -317,6 +328,10 @@ pub fn byte_range_for_cols(input: &str, start_col: u32, end_col: u32) -> Option<
     }
 }
 
+/// Like [`byte_range_for_cols`], but for `Span`s concatenated in-order.
+///
+/// The returned byte range is in the *joined* plain-text representation, i.e. as if all span
+/// contents were concatenated into a single string.
 pub fn byte_range_for_cols_in_spans(
     spans: &[Span<'static>],
     start_col: u32,

@@ -6,6 +6,12 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::text::CodeHighlighter;
 
+/// Styling and layout options for the `render_code_lines` render core.
+///
+/// This type is intentionally small and copyable so apps can cache rendered output keyed by:
+/// - the input lines (or a hash of the source text)
+/// - `language`
+/// - `styles` + `options`
 #[derive(Clone, Debug)]
 pub struct CodeRenderOptions {
     /// Whether to show 1-based line numbers.
@@ -45,8 +51,11 @@ impl Default for CodeRenderStyles {
 
 #[derive(Clone, Debug)]
 pub struct RenderedCode {
+    /// Fully materialized lines ready for drawing via `Paragraph`/custom rendering.
     pub lines: Vec<Line<'static>>,
+    /// Maximum display width (in terminal cell units) across all rendered lines.
     pub content_width: u32,
+    /// Total number of rendered lines.
     pub content_height: u32,
 }
 
@@ -60,6 +69,17 @@ impl RenderedCode {
 ///
 /// This is a rendering core. It intentionally does not include viewport state, selection,
 /// scrolling, or hit-testing.
+///
+/// # Caching
+///
+/// This function allocates and returns an owned `Vec<Line<'static>>`. For typical TUIs, it is
+/// recommended to cache the returned [`RenderedCode`] and only re-render when:
+/// - the source lines change
+/// - you toggle line numbers / change the gutter formatting
+/// - your theme or highlighter changes
+///
+/// If a highlighter is provided, the implementation calls `highlight_text(...)` once for the whole
+/// input (joined with `\n`) and then slices the output back into per-line spans.
 pub fn render_code_lines<S: AsRef<str>>(
     lines: &[S],
     language: Option<&str>,

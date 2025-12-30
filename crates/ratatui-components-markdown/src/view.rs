@@ -189,11 +189,68 @@ pub mod document {
     //! custom scroll containers, virtualization, etc.) while reusing the same parsing and
     //! rendering logic as [`super::MarkdownView`].
     //!
+    //! ## What you get
+    //!
+    //! - Parse markdown once into a [`MarkdownDocument`].
+    //! - Render into a fully materialized [`ratatui::text::Text`] for a given `width` and
+    //!   [`Theme`].
+    //! - Optional syntax highlighting via a [`CodeHighlighter`].
+    //!
+    //! ## Minimal example
+    //!
+    //! ```rust,no_run
+    //! use ratatui_components_core::theme::Theme;
+    //! use ratatui_components_markdown::view::document::{MarkdownDocument, MarkdownRenderOptions};
+    //!
+    //! let options = MarkdownRenderOptions::default();
+    //! let doc = MarkdownDocument::parse("# Hello\n\nSome *markdown*.", &options);
+    //!
+    //! // Cache this in your app state and only re-render on width/theme/source changes.
+    //! let theme = Theme::default();
+    //! let rendered = doc.render(80, &theme, &options, None);
+    //! let text = rendered.into_text();
+    //! # let _ = text;
+    //! ```
+    //!
+    //! ## What you *don't* get (by design)
+    //!
+    //! This is a render core only. It intentionally does **not** include:
+    //! - scrolling / viewport state
+    //! - mouse/keyboard selection and hit-testing
+    //! - clipboard integration
+    //!
+    //! If you want those, prefer [`super::MarkdownView`].
+    //!
+    //! ## Caching & layout best practices
+    //!
+    //! Rendering allocates a `Text<'static>` and can be non-trivial for large documents. In a
+    //! typical TUI, you should:
+    //! - keep a parsed [`MarkdownDocument`] in your app state
+    //! - cache the latest [`RenderedMarkdown`] keyed by:
+    //!   - `width` (layout changes)
+    //!   - theme changes (if your theme is dynamic)
+    //!   - highlighter changes (if you swap backends)
+    //! - only re-render when one of those inputs changes
+    //!
+    //! For *very* large markdown content, note that this core currently renders the whole document
+    //! into lines. You can still pair the result with a line-level virtualizer, but it will not
+    //! avoid the upfront render cost.
+    //!
+    //! ## Selection / copy in custom layouts
+    //!
+    //! The core output is just `Text`. If you implement your own selection, a common pattern is to
+    //! track an inclusive `(line, col)` → `(line, col)` range in terminal cell units and extract
+    //! bytes using `ratatui_components_core::render::byte_range_for_cols_in_spans`.
+    //!
     //! It intentionally does **not** expose lower-level internals (blocks/segments). APIs are
     //! expected to evolve until a 1.0 release.
 
     use super::*;
 
+    /// Render-core configuration for [`MarkdownDocument`].
+    ///
+    /// Some options affect parsing (e.g. link destination policies, relative path resolution). For
+    /// those, changing the option requires re-parsing via [`MarkdownDocument::parse`].
     #[derive(Clone, Debug)]
     pub struct MarkdownRenderOptions {
         pub wrap_prose: bool,
@@ -302,10 +359,23 @@ pub mod document {
             Self { source, blocks }
         }
 
+        /// Returns the original markdown source (as provided to [`Self::parse`]).
         pub fn source(&self) -> &str {
             &self.source
         }
 
+        /// Renders the document for a given terminal `width` and [`Theme`].
+        ///
+        /// This produces a fully materialized `Text<'static>` (owned lines/spans). It is designed
+        /// to be cached by callers and reused across frames.
+        ///
+        /// ## Highlighting
+        ///
+        /// If `highlighter` is provided, code blocks are highlighted synchronously during this
+        /// call. To keep worst-case frame times bounded, blocks longer than
+        /// `options.max_highlight_lines` are skipped.
+        ///
+        /// Tip: pass an `Option<Arc<_>>` and clone it per render call; `Arc` cloning is cheap.
         pub fn render(
             &self,
             width: u16,
@@ -413,14 +483,17 @@ pub mod document {
     }
 
     impl RenderedMarkdown {
+        /// Returns the rendered [`Text`] without transferring ownership.
         pub fn text(&self) -> &Text<'static> {
             &self.text
         }
 
+        /// Returns the rendered [`Text`], transferring ownership.
         pub fn into_text(self) -> Text<'static> {
             self.text
         }
 
+        /// Returns `(content_width, content_height)` in terminal cell units.
         pub fn content_size(&self) -> (u32, u32) {
             (self.content_width, self.content_height)
         }
