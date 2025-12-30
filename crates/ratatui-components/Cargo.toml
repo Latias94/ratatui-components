@@ -68,3 +68,7 @@ required-features = ["mdstream", "syntect"]
 [[example]]
 name = "dump"
 required-features = ["markdown"]
+
+[[example]]
+name = "render_core"
+required-features = ["markdown"]

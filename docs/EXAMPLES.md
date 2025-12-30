@@ -116,3 +116,13 @@ Notes:
 
 - Left pane uses repeated `MarkdownView::set_markdown()` on the raw string.
 - Right pane uses `MarkdownStreamView` (incremental: committed blocks cached, pending tail updated).
+
+## render_core (custom layout using render cores)
+
+Run:
+
+`cargo run -p ratatui-components --features markdown --example render_core`
+
+Optional (syntax highlighting via syntect):
+
+`cargo run -p ratatui-components --features markdown,syntect --example render_core`
