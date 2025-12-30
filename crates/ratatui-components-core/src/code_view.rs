@@ -57,6 +57,7 @@ pub struct CodeView {
     highlighter: Option<std::sync::Arc<dyn CodeHighlighter + Send + Sync>>,
     language: Option<String>,
     visible_highlight_cache: Option<VisibleHighlightCache>,
+    highlight_scratch: String,
     selection_anchor: Option<(usize, u32)>,
     selection: Option<((usize, u32), (usize, u32))>,
 }
@@ -474,11 +475,14 @@ impl CodeView {
             return std::sync::Arc::new(std::collections::HashMap::new());
         };
 
-        let slice = self.lines[start..end]
-            .iter()
-            .map(|s| s.as_str())
-            .collect::<Vec<_>>();
-        let highlighted = highlighter.highlight_lines(self.language.as_deref(), &slice);
+        self.highlight_scratch.clear();
+        for (i, line) in self.lines[start..end].iter().enumerate() {
+            if i > 0 {
+                self.highlight_scratch.push('\n');
+            }
+            self.highlight_scratch.push_str(line);
+        }
+        let highlighted = highlighter.highlight_text(self.language.as_deref(), &self.highlight_scratch);
         let mut map = std::collections::HashMap::new();
         for (i, spans) in highlighted.into_iter().enumerate() {
             map.insert(start + i, spans);

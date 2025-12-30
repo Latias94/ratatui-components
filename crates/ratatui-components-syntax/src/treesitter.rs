@@ -471,30 +471,31 @@ impl CodeHighlighter for TreeSitterHighlighter {
         self.theme.background
     }
 
-    fn highlight_lines(&self, language: Option<&str>, lines: &[&str]) -> Vec<Vec<Span<'static>>> {
+    fn highlight_text(&self, language: Option<&str>, text: &str) -> Vec<Vec<Span<'static>>> {
+        let raw_lines: Vec<&str> = text.split('\n').collect();
         let Some(entry) = self.entry_for(language) else {
-            return lines
+            return raw_lines
                 .iter()
                 .map(|l| vec![Span::raw((*l).to_string())])
                 .collect();
         };
 
-        let source = lines.join("\n");
         let mut highlighter = Highlighter::new();
-        let highlight_iter = match highlighter.highlight(&entry.config, source.as_bytes(), None, |_| {
-            None::<&HighlightConfiguration>
-        }) {
-            Ok(it) => it,
-            Err(_) => {
-                return lines
-                    .iter()
-                    .map(|l| vec![Span::raw((*l).to_string())])
-                    .collect();
-            }
-        };
+        let highlight_iter =
+            match highlighter.highlight(&entry.config, text.as_bytes(), None, |_| {
+                None::<&HighlightConfiguration>
+            }) {
+                Ok(it) => it,
+                Err(_) => {
+                    return raw_lines
+                        .iter()
+                        .map(|l| vec![Span::raw((*l).to_string())])
+                        .collect();
+                }
+            };
 
-        let mut out: Vec<Vec<Span<'static>>> = vec![Vec::new(); lines.len()];
-        let mut line_idx = 0usize;
+        let mut out: Vec<Vec<Span<'static>>> = Vec::new();
+        out.push(Vec::new());
         let mut stack: Vec<Highlight> = Vec::new();
 
         for event in highlight_iter {
@@ -506,32 +507,30 @@ impl CodeHighlighter for TreeSitterHighlighter {
                     let _ = stack.pop();
                 }
                 Ok(tree_sitter_highlight::HighlightEvent::Source { start, end }) => {
-                    if line_idx >= out.len() {
-                        break;
-                    }
                     let style = stack
                         .last()
                         .and_then(|h| entry.styles.get(h.0 as usize).copied())
                         .unwrap_or_default();
 
-                    let mut s = &source[start..end];
+                    let mut s = &text[start..end];
                     while let Some(pos) = s.find('\n') {
                         let before = &s[..pos];
-                        if !before.is_empty() && line_idx < out.len() {
-                            out[line_idx].push(Span::styled(before.to_string(), style));
+                        if !before.is_empty() {
+                            if let Some(line) = out.last_mut() {
+                                line.push(Span::styled(before.to_string(), style));
+                            }
                         }
-                        line_idx = line_idx.saturating_add(1);
-                        if line_idx >= out.len() {
-                            break;
-                        }
+                        out.push(Vec::new());
                         s = &s[pos + 1..];
                     }
-                    if line_idx < out.len() && !s.is_empty() {
-                        out[line_idx].push(Span::styled(s.to_string(), style));
+                    if !s.is_empty() {
+                        if let Some(line) = out.last_mut() {
+                            line.push(Span::styled(s.to_string(), style));
+                        }
                     }
                 }
                 Err(_) => {
-                    return lines
+                    return raw_lines
                         .iter()
                         .map(|l| vec![Span::raw((*l).to_string())])
                         .collect();
@@ -539,13 +538,30 @@ impl CodeHighlighter for TreeSitterHighlighter {
             }
         }
 
+        if out.len() < raw_lines.len() {
+            out.resize_with(raw_lines.len(), Vec::new);
+        } else if out.len() > raw_lines.len() {
+            out.truncate(raw_lines.len());
+        }
+
         for (i, spans) in out.iter_mut().enumerate() {
             if spans.is_empty() {
-                spans.push(Span::raw(lines.get(i).copied().unwrap_or("").to_string()));
+                spans.push(Span::raw(raw_lines.get(i).copied().unwrap_or("").to_string()));
             }
         }
 
         out
+    }
+
+    fn highlight_lines(&self, language: Option<&str>, lines: &[&str]) -> Vec<Vec<Span<'static>>> {
+        let mut text = String::new();
+        for (i, line) in lines.iter().enumerate() {
+            if i > 0 {
+                text.push('\n');
+            }
+            text.push_str(line);
+        }
+        self.highlight_text(language, &text)
     }
 }
 

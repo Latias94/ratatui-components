@@ -660,8 +660,14 @@ impl MarkdownView {
 
         thread::spawn(move || {
             while let Ok(req) = req_rx.recv() {
-                let refs: Vec<&str> = req.lines.iter().map(|s| s.as_str()).collect();
-                let highlighted = hi.highlight_lines(req.language.as_deref(), &refs);
+                let mut text = String::new();
+                for (i, line) in req.lines.iter().enumerate() {
+                    if i > 0 {
+                        text.push('\n');
+                    }
+                    text.push_str(line);
+                }
+                let highlighted = hi.highlight_text(req.language.as_deref(), &text);
                 let res = HighlightResult {
                     key: req.key,
                     highlighted: Arc::new(highlighted),
@@ -721,8 +727,14 @@ impl MarkdownView {
             if self.highlight_cache.contains_key(&code.highlight_key) {
                 continue;
             }
-            let refs: Vec<&str> = code.lines.iter().map(|s| s.as_str()).collect();
-            let highlighted = hi.highlight_lines(code.language.as_deref(), &refs);
+            let mut text = String::new();
+            for (i, line) in code.lines.iter().enumerate() {
+                if i > 0 {
+                    text.push('\n');
+                }
+                text.push_str(line);
+            }
+            let highlighted = hi.highlight_text(code.language.as_deref(), &text);
             self.highlight_cache
                 .insert(code.highlight_key, Arc::new(highlighted));
         }
@@ -757,8 +769,14 @@ impl MarkdownView {
                 if code.lines.len() > self.options.max_sync_highlight_lines {
                     return None;
                 }
-                let refs: Vec<&str> = code.lines.iter().map(|s| s.as_str()).collect();
-                let highlighted = hi.highlight_lines(code.language.as_deref(), &refs);
+                let mut text = String::new();
+                for (i, line) in code.lines.iter().enumerate() {
+                    if i > 0 {
+                        text.push('\n');
+                    }
+                    text.push_str(line);
+                }
+                let highlighted = hi.highlight_text(code.language.as_deref(), &text);
                 let highlighted = Arc::new(highlighted);
                 self.highlight_cache.insert(key, highlighted.clone());
                 self.highlight_pending.remove(&key);

@@ -62,6 +62,7 @@ pub struct DiffView {
     language_override: Option<String>,
     inline_ranges: HashMap<usize, Vec<(usize, usize)>>,
     visible_highlight_cache: Option<VisibleHighlightCache>,
+    highlight_scratch: String,
     selection_anchor: Option<(usize, u32)>,
     selection: Option<((usize, u32), (usize, u32))>,
 }
@@ -560,7 +561,7 @@ impl DiffView {
     }
 
     fn highlight_visible_uncached(
-        &self,
+        &mut self,
         start: usize,
         end: usize,
     ) -> HashMap<usize, Vec<Span<'static>>> {
@@ -574,13 +575,21 @@ impl DiffView {
         let mut run_indices: Vec<usize> = Vec::new();
 
         let flush = |out: &mut HashMap<usize, Vec<Span<'static>>>,
-                     lang: &mut Option<&str>,
-                     lines: &mut Vec<&str>,
-                     indices: &mut Vec<usize>| {
+                         scratch: &mut String,
+                         lang: &mut Option<&str>,
+                         lines: &mut Vec<&str>,
+                         indices: &mut Vec<usize>| {
             if indices.is_empty() {
                 return;
             }
-            let highlighted = hi.highlight_lines(*lang, lines);
+            scratch.clear();
+            for (i, line) in lines.iter().enumerate() {
+                if i > 0 {
+                    scratch.push('\n');
+                }
+                scratch.push_str(line);
+            }
+            let highlighted = hi.highlight_text(*lang, scratch);
             for (i, idx) in indices.iter().copied().enumerate() {
                 let spans = highlighted.get(i).cloned().unwrap_or_default();
                 out.insert(idx, spans);
@@ -597,7 +606,13 @@ impl DiffView {
                 line.kind,
                 DiffLineKind::Context | DiffLineKind::Add | DiffLineKind::Del
             ) {
-                flush(&mut out, &mut run_lang, &mut run_lines, &mut run_indices);
+                flush(
+                    &mut out,
+                    &mut self.highlight_scratch,
+                    &mut run_lang,
+                    &mut run_lines,
+                    &mut run_indices,
+                );
                 continue;
             }
             let lang = self
@@ -605,13 +620,25 @@ impl DiffView {
                 .as_deref()
                 .or(line.language_hint.as_deref());
             if run_lang != lang {
-                flush(&mut out, &mut run_lang, &mut run_lines, &mut run_indices);
+                flush(
+                    &mut out,
+                    &mut self.highlight_scratch,
+                    &mut run_lang,
+                    &mut run_lines,
+                    &mut run_indices,
+                );
                 run_lang = lang;
             }
             run_lines.push(line.content.as_str());
             run_indices.push(idx);
         }
-        flush(&mut out, &mut run_lang, &mut run_lines, &mut run_indices);
+        flush(
+            &mut out,
+            &mut self.highlight_scratch,
+            &mut run_lang,
+            &mut run_lines,
+            &mut run_indices,
+        );
         out
     }
 }

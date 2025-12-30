@@ -190,6 +190,14 @@ impl CodeHighlighter for SyntectHighlighter {
         self.theme_background_color()
     }
 
+    fn highlight_text(&self, language: Option<&str>, text: &str) -> Vec<Vec<Span<'static>>> {
+        let mut lines: Vec<&str> = text.split('\n').collect();
+        if lines.is_empty() {
+            lines.push("");
+        }
+        self.highlight_lines(language, &lines)
+    }
+
     fn highlight_lines(&self, language: Option<&str>, lines: &[&str]) -> Vec<Vec<Span<'static>>> {
         let syntax = self.syntax_for(language);
         let mut highlighter = HighlightLines::new(syntax, &self.theme);

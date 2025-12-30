@@ -5,6 +5,14 @@ use ratatui::text::Span;
 pub trait CodeHighlighter {
     fn highlight_lines(&self, language: Option<&str>, lines: &[&str]) -> Vec<Vec<Span<'static>>>;
 
+    fn highlight_text(&self, language: Option<&str>, text: &str) -> Vec<Vec<Span<'static>>> {
+        let mut lines: Vec<&str> = text.split('\n').collect();
+        if lines.is_empty() {
+            lines.push("");
+        }
+        self.highlight_lines(language, &lines)
+    }
+
     fn background_color(&self) -> Option<Color> {
         None
     }

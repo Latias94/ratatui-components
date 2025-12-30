@@ -89,6 +89,9 @@ impl AutoHighlighter {
     }
 
     pub fn backend_for_language(&self, language: Option<&str>) -> AutoHighlighterBackend {
+        #[cfg(not(feature = "treesitter"))]
+        let _ = language;
+
         #[cfg(feature = "treesitter")]
         let treesitter_ok = language
             .and_then(|l| self.treesitter.supports_language(l).then_some(()))
@@ -147,6 +150,24 @@ impl AutoHighlighter {
 impl CodeHighlighter for AutoHighlighter {
     fn background_color(&self) -> Option<Color> {
         self.background
+    }
+
+    fn highlight_text(&self, language: Option<&str>, text: &str) -> Vec<Vec<Span<'static>>> {
+        match self.backend_for_language(language) {
+            #[cfg(feature = "treesitter")]
+            AutoHighlighterBackend::TreeSitter => self.treesitter.highlight_text(language, text),
+            #[cfg(feature = "syntect")]
+            AutoHighlighterBackend::Syntect => self.syntect.highlight_text(language, text),
+            AutoHighlighterBackend::None => text
+                .split('\n')
+                .map(|l| vec![Span::raw(l.to_string())])
+                .collect(),
+            #[allow(unreachable_patterns)]
+            _ => text
+                .split('\n')
+                .map(|l| vec![Span::raw(l.to_string())])
+                .collect(),
+        }
     }
 
     fn highlight_lines(&self, language: Option<&str>, lines: &[&str]) -> Vec<Vec<Span<'static>>> {
