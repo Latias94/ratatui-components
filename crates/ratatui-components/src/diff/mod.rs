@@ -571,9 +571,27 @@ impl DiffView {
     pub fn lines_for_transcript(&mut self, theme: &Theme) -> Vec<Line<'static>> {
         let mut out: Vec<Line<'static>> = Vec::with_capacity(self.parsed.lines.len());
 
-        let mut highlighted: HashMap<usize, Vec<Span<'static>>> = HashMap::new();
+        self.poll_highlight_results();
+
+        let mut highlighted: Option<Arc<HashMap<usize, Vec<Span<'static>>>>> = None;
         if self.options.highlight_hunks && self.highlighter.is_some() {
-            highlighted = self.highlight_visible_uncached(0, self.parsed.lines.len());
+            let hash = self.full_inputs_hash;
+            if let Some(cache) = self.full_highlight_cache.as_ref()
+                && cache.hash == hash
+            {
+                highlighted = Some(cache.spans.clone());
+            } else {
+                let code_lines = count_highlightable_lines(&self.parsed, 0, self.parsed.lines.len());
+                if self.options.async_highlighting && code_lines > self.options.max_sync_highlight_lines {
+                    self.ensure_full_highlighting();
+                } else {
+                    let m = self.highlight_visible_uncached(0, self.parsed.lines.len());
+                    let spans = Arc::new(m);
+                    self.full_highlight_cache = Some(FullHighlightCache { hash, spans: spans.clone() });
+                    self.full_highlight_pending = None;
+                    highlighted = Some(spans);
+                }
+            }
         }
 
         for (idx, l) in self.parsed.lines.iter().enumerate() {
@@ -588,7 +606,8 @@ impl DiffView {
                     ));
 
                     let mut rest = highlighted
-                        .get(&idx)
+                        .as_ref()
+                        .and_then(|m| m.get(&idx))
                         .cloned()
                         .map(|s| patch_spans_style(s, line_style))
                         .unwrap_or_else(|| vec![Span::styled(l.content.clone(), line_style)]);
@@ -1234,6 +1253,50 @@ diff --git a/main.rs b/main.rs
         let mut buf = Buffer::empty(Rect::new(0, 0, 50, 6));
         view.render_ref(Rect::new(0, 0, 50, 6), &mut buf, &theme);
         view.render_ref(Rect::new(0, 0, 50, 6), &mut buf, &theme);
+
+        assert_eq!(highlighter.calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[test]
+    fn transcript_lines_cache_full_highlighting_when_sync() {
+        #[derive(Default)]
+        struct CountingHighlighter {
+            calls: AtomicUsize,
+        }
+
+        impl CodeHighlighter for CountingHighlighter {
+            fn highlight_lines(
+                &self,
+                _language: Option<&str>,
+                lines: &[&str],
+            ) -> Vec<Vec<Span<'static>>> {
+                self.calls.fetch_add(1, Ordering::SeqCst);
+                lines
+                    .iter()
+                    .map(|l| vec![Span::raw((*l).to_string())])
+                    .collect()
+            }
+        }
+
+        let diff = "\
+diff --git a/main.rs b/main.rs
+--- a/main.rs
++++ b/main.rs
+@@ -1 +1 @@
+ fn main() {}
+";
+
+        let highlighter = Arc::new(CountingHighlighter::default());
+        let mut view = DiffView::with_options(DiffViewOptions {
+            async_highlighting: false,
+            ..Default::default()
+        });
+        view.set_highlighter(Some(highlighter.clone()));
+        view.set_diff(diff);
+
+        let theme = Theme::default();
+        let _ = view.lines_for_transcript(&theme);
+        let _ = view.lines_for_transcript(&theme);
 
         assert_eq!(highlighter.calls.load(Ordering::SeqCst), 1);
     }
