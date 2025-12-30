@@ -16,6 +16,35 @@ let rendered = doc.render(80, &Theme::default(), &opts, None);
 let text: Text<'static> = rendered.into_text();
 ```
 
+## Render Core (Code)
+
+If you want to render code with optional syntax highlighting, but handle layout/scrolling yourself:
+
+```rust
+use ratatui_components_core::code_render::{
+    render_code_lines, CodeRenderOptions, CodeRenderStyles,
+};
+use ratatui_components_core::theme::Theme;
+
+let theme = Theme::default();
+let code = ["fn main() {", "  println!(\"hi\");", "}"];
+
+let rendered = render_code_lines(
+    &code,
+    Some("rs"),
+    None, // or Some(&*highlighter)
+    CodeRenderStyles {
+        base: theme.code_inline,
+        gutter: theme.text_muted,
+    },
+    CodeRenderOptions {
+        show_line_numbers: true,
+        ..Default::default()
+    },
+);
+let text = rendered.into_text();
+```
+
 ## Preview (MarkdownView + DiffView + TextArea)
 
 Run:
