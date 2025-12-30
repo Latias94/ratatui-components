@@ -182,7 +182,7 @@ mod with_mdstream {
         });
     }
 
-    fn run<B: ratatui::backend::Backend>(
+    fn run<B: ratatui::backend::Backend<Error = io::Error>>(
         terminal: &mut Terminal<B>,
         theme: &Theme,
         app: &mut App,

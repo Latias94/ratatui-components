@@ -13,8 +13,6 @@ pub struct Theme {
 
 impl Default for Theme {
     fn default() -> Self {
-        use ratatui::style::Stylize;
-
         Self {
             text_primary: Style::default(),
             text_muted: Style::default().dark_gray(),

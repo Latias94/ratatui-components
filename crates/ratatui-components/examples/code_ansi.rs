@@ -110,7 +110,7 @@ struct LayoutState {
     ansi: ratatui::layout::Rect,
 }
 
-fn run<B: ratatui::backend::Backend>(
+fn run<B: ratatui::backend::Backend<Error = io::Error>>(
     terminal: &mut Terminal<B>,
     theme: &Theme,
     help: &HelpBar,
@@ -280,7 +280,6 @@ fn build_help_bar(keymap: &[BindingAction]) -> HelpBar {
 }
 
 fn theme_key_style() -> ratatui::style::Style {
-    use ratatui::style::Stylize;
     ratatui::style::Style::default().bold()
 }
 

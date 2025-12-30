@@ -112,7 +112,7 @@ fn main() -> io::Result<()> {
 }
 
 #[allow(clippy::too_many_arguments)]
-fn run<B: ratatui::backend::Backend>(
+fn run<B: ratatui::backend::Backend<Error = io::Error>>(
     terminal: &mut Terminal<B>,
     theme: &Theme,
     transcript: &mut TranscriptView,

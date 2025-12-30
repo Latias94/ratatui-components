@@ -78,7 +78,7 @@ fn main() -> io::Result<()> {
     res
 }
 
-fn run<B: ratatui::backend::Backend>(
+fn run<B: ratatui::backend::Backend<Error = io::Error>>(
     terminal: &mut Terminal<B>,
     theme: &Theme,
     transcript: &mut TranscriptView,
