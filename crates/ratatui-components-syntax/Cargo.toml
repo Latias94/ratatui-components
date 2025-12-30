@@ -25,7 +25,7 @@ tree-sitter-javascript = { version = "*", optional = true }
 tree-sitter-json = { version = "*", optional = true }
 tree-sitter-python = { version = "*", optional = true }
 tree-sitter-rust = { version = "*", optional = true }
-tree-sitter-toml = { version = "*", optional = true }
+tree-sitter-toml-ng = { version = "*", optional = true }
 tree-sitter-typescript = { version = "*", optional = true }
 tree-sitter-yaml = { version = "*", optional = true }
 
@@ -47,7 +47,7 @@ treesitter-lang-javascript = ["treesitter", "dep:tree-sitter-javascript"]
 treesitter-lang-json = ["treesitter", "dep:tree-sitter-json"]
 treesitter-lang-python = ["treesitter", "dep:tree-sitter-python"]
 treesitter-lang-rust = ["treesitter", "dep:tree-sitter-rust"]
-treesitter-lang-toml = ["treesitter", "dep:tree-sitter-toml"]
+treesitter-lang-toml = ["treesitter", "dep:tree-sitter-toml-ng"]
 treesitter-lang-typescript = ["treesitter", "dep:tree-sitter-typescript"]
 treesitter-lang-yaml = ["treesitter", "dep:tree-sitter-yaml"]
 

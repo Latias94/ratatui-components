@@ -30,7 +30,7 @@ pub mod langs {
     #[cfg(feature = "treesitter-lang-rust")]
     pub use tree_sitter_rust as lang_rust;
     #[cfg(feature = "treesitter-lang-toml")]
-    pub use tree_sitter_toml as lang_toml;
+    pub use tree_sitter_toml_ng as lang_toml;
     #[cfg(feature = "treesitter-lang-typescript")]
     pub use tree_sitter_typescript as lang_typescript;
     #[cfg(feature = "treesitter-lang-yaml")]
@@ -135,6 +135,34 @@ impl TreeSitterHighlighter {
 
         #[cfg(feature = "treesitter-lang-rust")]
         this.register_rust();
+        #[cfg(feature = "treesitter-lang-bash")]
+        this.register_bash();
+        #[cfg(feature = "treesitter-lang-python")]
+        this.register_python();
+        #[cfg(feature = "treesitter-lang-javascript")]
+        this.register_javascript();
+        #[cfg(feature = "treesitter-lang-typescript")]
+        this.register_typescript();
+        #[cfg(feature = "treesitter-lang-typescript")]
+        this.register_tsx();
+        #[cfg(feature = "treesitter-lang-json")]
+        this.register_json();
+        #[cfg(feature = "treesitter-lang-yaml")]
+        this.register_yaml();
+        #[cfg(feature = "treesitter-lang-toml")]
+        this.register_toml();
+        #[cfg(feature = "treesitter-lang-go")]
+        this.register_go();
+        #[cfg(feature = "treesitter-lang-html")]
+        this.register_html();
+        #[cfg(feature = "treesitter-lang-css")]
+        this.register_css();
+        #[cfg(feature = "treesitter-lang-c")]
+        this.register_c();
+        #[cfg(feature = "treesitter-lang-cpp")]
+        this.register_cpp();
+        #[cfg(feature = "treesitter-lang-java")]
+        this.register_java();
 
         this
     }
@@ -148,6 +176,34 @@ impl TreeSitterHighlighter {
 
         #[cfg(feature = "treesitter-lang-rust")]
         this.register_rust();
+        #[cfg(feature = "treesitter-lang-bash")]
+        this.register_bash();
+        #[cfg(feature = "treesitter-lang-python")]
+        this.register_python();
+        #[cfg(feature = "treesitter-lang-javascript")]
+        this.register_javascript();
+        #[cfg(feature = "treesitter-lang-typescript")]
+        this.register_typescript();
+        #[cfg(feature = "treesitter-lang-typescript")]
+        this.register_tsx();
+        #[cfg(feature = "treesitter-lang-json")]
+        this.register_json();
+        #[cfg(feature = "treesitter-lang-yaml")]
+        this.register_yaml();
+        #[cfg(feature = "treesitter-lang-toml")]
+        this.register_toml();
+        #[cfg(feature = "treesitter-lang-go")]
+        this.register_go();
+        #[cfg(feature = "treesitter-lang-html")]
+        this.register_html();
+        #[cfg(feature = "treesitter-lang-css")]
+        this.register_css();
+        #[cfg(feature = "treesitter-lang-c")]
+        this.register_c();
+        #[cfg(feature = "treesitter-lang-cpp")]
+        this.register_cpp();
+        #[cfg(feature = "treesitter-lang-java")]
+        this.register_java();
 
         this
     }
@@ -203,6 +259,174 @@ impl TreeSitterHighlighter {
             langs::lang_rust::INJECTIONS_QUERY,
             "",
             ["rs", "rust"],
+        );
+    }
+
+    #[cfg(feature = "treesitter-lang-bash")]
+    pub fn register_bash(&mut self) {
+        let _ = self.register(
+            "bash",
+            langs::lang_bash::LANGUAGE.into(),
+            langs::lang_bash::HIGHLIGHT_QUERY,
+            "",
+            "",
+            ["sh", "bash", "shell", "zsh"],
+        );
+    }
+
+    #[cfg(feature = "treesitter-lang-python")]
+    pub fn register_python(&mut self) {
+        let _ = self.register(
+            "python",
+            langs::lang_python::LANGUAGE.into(),
+            langs::lang_python::HIGHLIGHTS_QUERY,
+            "",
+            "",
+            ["py", "python"],
+        );
+    }
+
+    #[cfg(feature = "treesitter-lang-javascript")]
+    pub fn register_javascript(&mut self) {
+        let _ = self.register(
+            "javascript",
+            langs::lang_javascript::LANGUAGE.into(),
+            langs::lang_javascript::HIGHLIGHT_QUERY,
+            langs::lang_javascript::INJECTIONS_QUERY,
+            langs::lang_javascript::LOCALS_QUERY,
+            ["js", "javascript", "jsx"],
+        );
+    }
+
+    #[cfg(feature = "treesitter-lang-typescript")]
+    pub fn register_typescript(&mut self) {
+        let _ = self.register(
+            "typescript",
+            langs::lang_typescript::LANGUAGE_TYPESCRIPT.into(),
+            langs::lang_typescript::HIGHLIGHTS_QUERY,
+            "",
+            langs::lang_typescript::LOCALS_QUERY,
+            ["ts", "typescript"],
+        );
+    }
+
+    #[cfg(feature = "treesitter-lang-typescript")]
+    pub fn register_tsx(&mut self) {
+        let _ = self.register(
+            "tsx",
+            langs::lang_typescript::LANGUAGE_TSX.into(),
+            langs::lang_typescript::HIGHLIGHTS_QUERY,
+            "",
+            langs::lang_typescript::LOCALS_QUERY,
+            ["tsx"],
+        );
+    }
+
+    #[cfg(feature = "treesitter-lang-json")]
+    pub fn register_json(&mut self) {
+        let _ = self.register(
+            "json",
+            langs::lang_json::LANGUAGE.into(),
+            langs::lang_json::HIGHLIGHTS_QUERY,
+            "",
+            "",
+            ["json"],
+        );
+    }
+
+    #[cfg(feature = "treesitter-lang-yaml")]
+    pub fn register_yaml(&mut self) {
+        let _ = self.register(
+            "yaml",
+            langs::lang_yaml::LANGUAGE.into(),
+            langs::lang_yaml::HIGHLIGHTS_QUERY,
+            "",
+            "",
+            ["yaml", "yml"],
+        );
+    }
+
+    #[cfg(feature = "treesitter-lang-toml")]
+    pub fn register_toml(&mut self) {
+        let _ = self.register(
+            "toml",
+            langs::lang_toml::LANGUAGE.into(),
+            langs::lang_toml::HIGHLIGHTS_QUERY,
+            "",
+            "",
+            ["toml"],
+        );
+    }
+
+    #[cfg(feature = "treesitter-lang-go")]
+    pub fn register_go(&mut self) {
+        let _ = self.register(
+            "go",
+            langs::lang_go::LANGUAGE.into(),
+            langs::lang_go::HIGHLIGHTS_QUERY,
+            "",
+            "",
+            ["go"],
+        );
+    }
+
+    #[cfg(feature = "treesitter-lang-html")]
+    pub fn register_html(&mut self) {
+        let _ = self.register(
+            "html",
+            langs::lang_html::LANGUAGE.into(),
+            langs::lang_html::HIGHLIGHTS_QUERY,
+            langs::lang_html::INJECTIONS_QUERY,
+            "",
+            ["html", "htm"],
+        );
+    }
+
+    #[cfg(feature = "treesitter-lang-css")]
+    pub fn register_css(&mut self) {
+        let _ = self.register(
+            "css",
+            langs::lang_css::LANGUAGE.into(),
+            langs::lang_css::HIGHLIGHTS_QUERY,
+            "",
+            "",
+            ["css"],
+        );
+    }
+
+    #[cfg(feature = "treesitter-lang-c")]
+    pub fn register_c(&mut self) {
+        let _ = self.register(
+            "c",
+            langs::lang_c::LANGUAGE.into(),
+            langs::lang_c::HIGHLIGHT_QUERY,
+            "",
+            "",
+            ["c", "h"],
+        );
+    }
+
+    #[cfg(feature = "treesitter-lang-cpp")]
+    pub fn register_cpp(&mut self) {
+        let _ = self.register(
+            "cpp",
+            langs::lang_cpp::LANGUAGE.into(),
+            langs::lang_cpp::HIGHLIGHT_QUERY,
+            "",
+            "",
+            ["cpp", "cc", "cxx", "hpp", "hh", "hxx"],
+        );
+    }
+
+    #[cfg(feature = "treesitter-lang-java")]
+    pub fn register_java(&mut self) {
+        let _ = self.register(
+            "java",
+            langs::lang_java::LANGUAGE.into(),
+            langs::lang_java::HIGHLIGHTS_QUERY,
+            "",
+            "",
+            ["java"],
         );
     }
 
@@ -321,5 +545,47 @@ mod tests {
             .flatten()
             .any(|s| s.style != Style::default());
         assert!(any_styled);
+    }
+
+    #[test]
+    fn highlights_other_enabled_languages_without_panicking() {
+        let h = TreeSitterHighlighter::new();
+
+        let mut cases: Vec<(&str, Vec<&str>)> = Vec::new();
+
+        #[cfg(feature = "treesitter-lang-bash")]
+        cases.push(("sh", vec!["echo hello", "x=1"]));
+        #[cfg(feature = "treesitter-lang-python")]
+        cases.push(("py", vec!["def f(x):", "  return x + 1"]));
+        #[cfg(feature = "treesitter-lang-javascript")]
+        cases.push(("js", vec!["function f(x) {", "  return x + 1;", "}"]));
+        #[cfg(feature = "treesitter-lang-typescript")]
+        cases.push(("ts", vec!["function f(x: number): number {", "  return x + 1;", "}"]));
+        #[cfg(feature = "treesitter-lang-typescript")]
+        cases.push(("tsx", vec!["const x = <div>Hello</div>;", "export default x;"]));
+        #[cfg(feature = "treesitter-lang-json")]
+        cases.push(("json", vec!["{", "  \"x\": 1", "}"]));
+        #[cfg(feature = "treesitter-lang-yaml")]
+        cases.push(("yaml", vec!["x: 1", "y: true"]));
+        #[cfg(feature = "treesitter-lang-toml")]
+        cases.push(("toml", vec!["[package]", "name = \"x\""]));
+        #[cfg(feature = "treesitter-lang-go")]
+        cases.push(("go", vec!["package main", "func main() {}"]));
+        #[cfg(feature = "treesitter-lang-html")]
+        cases.push(("html", vec!["<div>Hello</div>"]));
+        #[cfg(feature = "treesitter-lang-css")]
+        cases.push(("css", vec![".a { color: red; }"]));
+        #[cfg(feature = "treesitter-lang-c")]
+        cases.push(("c", vec!["int main() {", "  return 0;", "}"]));
+        #[cfg(feature = "treesitter-lang-cpp")]
+        cases.push(("cpp", vec!["int main() {", "  return 0;", "}"]));
+        #[cfg(feature = "treesitter-lang-java")]
+        cases.push(("java", vec!["class A {", "  void f() {}", "}"]));
+
+        for (lang, lines) in cases {
+            let out = h.highlight_lines(Some(lang), &lines);
+            assert_eq!(out.len(), lines.len(), "lang={lang}");
+            assert!(out.iter().all(|l| !l.is_empty()), "lang={lang}");
+        }
     }
 }

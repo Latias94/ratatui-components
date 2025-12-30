@@ -1088,7 +1088,7 @@ dependencies = [
  "ratatui-core",
  "syntect",
  "termprofile",
- "tree-sitter 0.26.3",
+ "tree-sitter",
  "tree-sitter-bash",
  "tree-sitter-c",
  "tree-sitter-cpp",
@@ -1101,7 +1101,7 @@ dependencies = [
  "tree-sitter-json",
  "tree-sitter-python",
  "tree-sitter-rust",
- "tree-sitter-toml",
+ "tree-sitter-toml-ng",
  "tree-sitter-typescript",
  "tree-sitter-yaml",
 ]
@@ -1543,16 +1543,6 @@ dependencies = [
 
 [[package]]
 name = "tree-sitter"
-version = "0.20.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e747b1f9b7b931ed39a548c1fae149101497de3c1fc8d9e18c62c1a66c683d3d"
-dependencies = [
- "cc",
- "regex",
-]
-
-[[package]]
-name = "tree-sitter"
 version = "0.26.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "974d205cc395652cfa8b37daa053fe56eebd429acf8dc055503fee648dae981e"
@@ -1624,7 +1614,7 @@ dependencies = [
  "regex",
  "streaming-iterator",
  "thiserror 2.0.17",
- "tree-sitter 0.26.3",
+ "tree-sitter",
 ]
 
 [[package]]
@@ -1694,13 +1684,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "tree-sitter-toml"
-version = "0.20.0"
+name = "tree-sitter-toml-ng"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca517f578a98b23d20780247cc2688407fa81effad5b627a5a364ec3339b53e8"
+checksum = "e9adc2c898ae49730e857d75be403da3f92bb81d8e37a2f918a08dd10de5ebb1"
 dependencies = [
  "cc",
- "tree-sitter 0.20.10",
+ "tree-sitter-language",
 ]
 
 [[package]]
